@@ -1,0 +1,237 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="container">
+    <!-- Add Action Button -->
+    <section>
+        <h2>Manage Tasks</h2>
+		<button id="showFormButton" type="button" class="show-btn">Add Task</button>
+
+    </section>
+
+    <!-- Task Creation Form (Initially Hidden) -->
+    <section id="taskFormSection" style="display: none;">
+        <h2>Create a Task</h2>
+        <form id="addTaskForm" action="{{ url_for('add_task') }}" method="post">
+            <div class="form-group">
+                <label for="description">Description</label>
+                <input type="text" name="description" required>
+            </div>
+            <div class="form-group">
+                <label for="priority">Priority</label>
+                <select name="priority">
+                    <option value="High">High Priority</option>
+                    <option value="Medium" selected>Medium Priority</option>
+                    <option value="Low">Low Priority</option>
+                </select>
+            </div>
+			<div class="form-group">
+			    <label for="monthly_action_id">Monthly Action Item (Optional)</label>
+			    <select name="monthly_action_id">
+			        <option value="">Select Monthly Action Item</option>
+			        {% for action in monthly_actions %}
+			        <option value="{{ action[0] }}">{{ action[1] }} ({{ action[2] }} Priority)</option>
+			        {% endfor %}
+			    </select>
+			</div>
+
+            <div class="form-group">
+                <label for="due_date">Due Date</label>
+                <input type="date" name="due_date">
+            </div>
+            <button type="submit" id="addTaskButton">Add Task</button>
+        </form>
+ 
+	</section>
+    <!-- Search Form for Fetching Tasks -->
+    <section>
+        <h2>Fetch Tasks</h2>
+        <form id="fetchForm" class="add-task-form">
+			<select name="status" id="status">
+			    <option value="">All</option>
+			    <option value="Open">Open</option>
+			    <option value="In Progress">In Progress</option>
+			    <option value="Completed">Completed</option>
+			    <option value="Cancelled">Cancelled</option>
+			</select>
+            <input type="text" id="keyword" name="keyword" placeholder="Search keyword">
+            <button type="button" id="fetchButton">Fetch Tasks</button>
+        </form>
+        <div id="taskResults"></div> <!-- Container to display fetched task results -->
+    </section>
+
+    <!-- Task List Section -->
+    <section>
+        <h2>Task List</h2>
+        {% if tasks %}
+        <table class="task-list">
+            <thead>
+                <tr>
+                    <th>ID</th>
+                    <th>Description</th>
+                    <th>Priority</th>
+                    <th>Status</th>
+					<th>Monthly Action</th>
+                    <th>Due Date</th>
+                    <th>Completion (%)</th>
+                    <th>Actions</th>
+					<th>Updates </th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for task in tasks %}
+                <tr>
+                    <td>{{ task[0] }}</td>
+                    <td>{{ task[1] }}</td>
+                    <td>{{ task[2] }}</td>
+                    <td>{{ task[3] }}</td>
+					<td>{{ task[8] if task[8] else 'No linked action' }}</td>>
+                    <td>{{ task[7] }}</td>
+                    <td>{{ task[4] }}</td>
+					<td>
+					  <!-- Update Task Progress -->
+					  <form action="{{ url_for('update_task', task_id=task[0]) }}" method="POST" class="form-container">
+						<label for="progress">Progress (%)</label>
+						<input
+						  type="number"
+						  id="progress"
+						  name="percentage_completion"
+						  min="0"
+						  max="100"
+						  value="{{ task[4] }}"
+						  required
+						/>
+						<button type="submit" class="update-btn">Update</button>
+					  </form>
+
+					  <!-- Update Task Status -->
+					  <form action="/update/{{ task[0] }}" method="POST" class="form-container">
+						<label for="status">Task Status</label>
+						<select name="status" id="status">
+						  <option value="Open" {% if task[2] == 'Open' %}selected{% endif %}>Open</option>
+						  <option value="In Progress" {% if task[2] == 'In Progress' %}selected{% endif %}>In Progress</option>
+						  <option value="Completed" {% if task[2] == 'Completed' %}selected{% endif %}>Completed</option>
+						  <option value="Cancelled" {% if task[2] == 'Cancelled' %}selected{% endif %}>Cancelled</option>
+						</select>
+						<textareaf
+						  name="notes"
+						  class="notes-text"
+						  placeholder="Add notes..."
+						  >{{ task[6] if task[6] else '' }}</textareaf
+						>
+						<button type="submit" class="status-btn">Update</button> 
+					  </form>
+
+					  <!-- Delete Task -->
+					  <form action="/delete/{{ task[0] }}" method="POST" class="delete-form">
+						<button type="submit" class="delete-btn" onclick="return confirm('Are you sure you want to delete this item?')">Delete</button>
+					  </form>
+					</td>
+				    <td>{{ task[5] }}</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+        {% else %}
+        <p>No tasks to display</p>
+        {% endif %}
+    </section>
+	<script>
+	// Fetch Tasks Dynamically
+	document.getElementById('fetchButton').addEventListener('click', function () {
+	    const status = document.getElementById('status').value;
+	    const keyword = document.getElementById('keyword').value;
+
+	    const params = new URLSearchParams();
+	    if (status) params.append('status', status);
+	    if (keyword) params.append('keyword', keyword);
+
+	    fetch(`/fetch?${params.toString()}`)
+	        .then(response => response.json())
+	        .then(data => {
+	            const taskResults = document.getElementById('taskResults');
+	            taskResults.innerHTML = ''; // Clear previous results
+
+	            if (data.success) {
+	                if (data.tasks.length === 0) {
+	                    taskResults.innerHTML = '<p>No tasks found.</p>';
+	                } else {
+	                    const table = document.createElement('table');
+	                    table.className = 'history-list';
+	                    const thead = `
+						    
+	                        <thead>  
+								<tr>
+								    <th colspan="6"><h2>Historical Tasks</h2></th>
+								</tr>							
+	                            <tr>
+	                                <th>ID</th>
+	                                <th>Description</th>
+	                                <th>Status</th>
+	                                <th>Updates</th>
+	                                <th>Created At</th>
+	                            </tr>
+	                        </thead>`;
+	                    table.innerHTML = thead;
+
+	                    const tbody = document.createElement('tbody');
+	                    data.tasks.forEach(task => {
+	                        const row = `
+
+	                            <tr>
+	                                <td>${task.id}</td>
+	                                <td>${task.description}</td>
+	                                <td>${task.status}</td>
+	                                <td>${task.notes || ''}</td>
+	                                <td>${task.created_at}</td>
+	                            </tr>`;
+	                        tbody.innerHTML += row;
+	                    });
+	                    table.appendChild(tbody);
+	                    taskResults.appendChild(table);
+	                }
+	            } else {
+	                taskResults.innerHTML = `<p>Error: ${data.error}</p>`;
+	            }
+	        })
+	        .catch(error => {
+	            console.error('Error fetching tasks:', error);
+	        });
+	});
+	document.querySelectorAll(".notes-text").forEach(textarea => {
+	  textarea.addEventListener('change', function() {
+	    const taskId = this.closest('tr').querySelector("td:first-child").textContent;
+	    const noteContent = this.value;
+
+	    fetch(`/update-note/${taskId}`, {
+	      method: 'POST',
+	      headers: { 'Content-Type': 'application/json' },
+	      body: JSON.stringify({ notes: noteContent })
+	    })
+	    .then(response => response.json())
+	    .then(data => {
+	      if(data.success) {
+	        console.log('Notes updated');
+	      } else {
+	        alert('Failed to update notes');
+	      }
+	    });
+	  });
+	});
+    // Show the form when the "Add Action" button is clicked
+    document.getElementById("showFormButton").addEventListener("click", function () {
+        const formSection = document.getElementById("taskFormSection");
+        formSection.style.display = "block"; // Show the form section
+        this.style.display = "none"; // Hide the "Add Action" button
+    });
+
+    // Optional: Alert the form action on form submission
+    document.getElementById("addTaskForm").addEventListener("submit", function (event) {
+        event.preventDefault(); // Prevent immediate form submission
+        const formAction = this.action; // Get the form's action URL
+        alert(`Form Action URL: ${formAction}`); // Display the action URL
+        this.submit(); // Submit the form
+    });
+    </script>
+</div>
+{% endblock %}

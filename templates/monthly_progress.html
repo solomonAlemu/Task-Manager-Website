@@ -1,0 +1,49 @@
+{% extends 'base.html' %}
+
+{% block content %}
+<div class="container">
+    <h2>Monthly Progress</h2>
+    <canvas id="priorityCompletionChart"></canvas>
+</div>
+
+<script src="/static/chart.min.js"></script>
+<canvas id="myChart" style="width:100%;max-width:600px"></canvas>
+<script>
+    document.addEventListener("DOMContentLoaded", async () => {
+        try {
+            const response = await fetch("/monthly-progress-data");
+            const data = await response.json();
+
+            const ctx = document.getElementById("priorityCompletionChart").getContext("2d");
+            new Chart(ctx, {
+                type: "bar",
+                data: {
+                    labels: data.labels,  // Priorities
+                    datasets: [
+                        {
+                            label: "Avg Completion (%)",
+                            data: data.completions,
+                            backgroundColor: "rgba(75, 192, 192, 0.5)"
+                        },
+                        {
+                            label: "Total Tasks",
+                            data: data.total_tasks,
+                            backgroundColor: "rgba(153, 102, 255, 0.5)"
+                        }
+                    ]
+                },
+                options: {
+                    responsive: true,
+                    scales: {
+                        y: {
+                            beginAtZero: true
+                        }
+                    }
+                }
+            });
+        } catch (error) {
+            console.error("Error loading chart data:", error);
+        }
+    });
+</script>
+{% endblock %}

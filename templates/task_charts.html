@@ -1,0 +1,77 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="container">
+    <h2>Task Charts</h2>
+    <div>
+        <h3>Priority vs. Progress</h3>
+        <canvas id="priorityChart" width="400" height="200"></canvas>
+    </div>
+    <div>
+        <h3>Due Date Progress</h3>
+        <div id="progressBars"></div>
+    </div>
+</div>
+
+<script>
+    // Fetch task data
+    fetch('/task-data')
+        .then(response => response.json())
+        .then(data => {
+            // Priority vs. Progress Chart
+            const ctxPriority = document.getElementById('priorityChart').getContext('2d');
+            new Chart(ctxPriority, {
+                type: 'bar',
+                data: {
+                    labels: data.tasks.map(task => task.name),
+                    datasets: [{
+                        label: 'Priority',
+                        data: data.priorities,
+                        backgroundColor: 'rgba(255, 99, 132, 0.2)',
+                        borderColor: 'rgba(255, 99, 132, 1)',
+                        borderWidth: 1
+                    }, {
+                        label: 'Progress (%)',
+                        data: data.progress,
+                        backgroundColor: 'rgba(75, 192, 192, 0.2)',
+                        borderColor: 'rgba(75, 192, 192, 1)',
+                        borderWidth: 1
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    scales: {
+                        y: { beginAtZero: true }
+                    }
+                }
+            });
+
+            // Due Date Progress Bars
+            const progressBars = document.getElementById('progressBars');
+            data.tasks.forEach(task => {
+                const barContainer = document.createElement('div');
+                barContainer.style.margin = '10px 0';
+
+                const label = document.createElement('span');
+                label.textContent = `${task.name} (${task.due_date}): `;
+                barContainer.appendChild(label);
+
+                const progressBar = document.createElement('div');
+                progressBar.style.width = '100%';
+                progressBar.style.backgroundColor = '#eee';
+                progressBar.style.borderRadius = '5px';
+
+                const progress = document.createElement('div');
+                progress.style.width = `${task.progress}%`;
+                progress.style.height = '20px';
+                progress.style.backgroundColor = task.progress > 75 ? 'green' : (task.progress > 50 ? 'orange' : 'red');
+                progress.style.borderRadius = '5px';
+
+                progressBar.appendChild(progress);
+                barContainer.appendChild(progressBar);
+
+                progressBars.appendChild(barContainer);
+            });
+        });
+</script>
+{% endblock %}

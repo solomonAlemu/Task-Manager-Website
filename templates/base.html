@@ -1,0 +1,45 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Task Manager</title>
+
+    <!-- Link to CSS -->
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+
+    <!-- Favicon -->
+    <link rel="icon" href="{{ url_for('static', filename='task_mgr.png') }}?v=1" type="image/png">
+	<link rel="icon" href="/static/task_mgr.png?v=1" type="image/png">
+    <!-- Include Chart.js for charts -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
+</head>
+<body>
+    <!-- Header Section -->
+    <header>
+        <nav>
+            <ul class="nav-links">
+                <li><a href="{{ url_for('home') }}">Home</a></li>
+				<li><a href="{{ url_for('monthly_action') }}">Monthly Actions</a></li>
+				<li><a href="{{ url_for('monthly_progress') }}">Monthly Progress</a></li>
+                <li><a href="{{ url_for('task_charts') }}">Task Progress</a></li>
+            </ul>
+        </nav>
+    </header>
+
+    <!-- Main Content -->
+    <main>
+        <section class="content-section">
+            {% block content %}{% endblock %}
+        </section>
+    </main>
+
+    <!-- Footer Section -->
+    <footer>
+        <p>&copy; {{ current_year }} Task Manager. All rights reserved.</p>
+    </footer>
+</body>
+
+</html>

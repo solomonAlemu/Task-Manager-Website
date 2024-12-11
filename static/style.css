@@ -1,0 +1,241 @@
+/* General Styles */
+body {
+    font-family: Arial, sans-serif;
+    line-height: 1.6;
+    margin: 0;
+    padding: 0;
+    background-color: #f4f4f9;
+    color: #333;
+}
+
+.container {
+    max-width: 1500px;
+    margin: 20px auto;
+    padding: 20px;
+    background: #fff;
+    border-radius: 8px;
+    box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+}
+
+h2 {
+    color: #444;
+    margin-bottom: 20px;
+}
+
+/* Navigation */
+header {
+    background: #4CAF50;
+    color: #fff;
+    padding: 10px 0;
+}
+
+header nav {
+    max-width: 1200px;
+    margin: 0 auto;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.nav-links {
+    list-style: none;
+    padding: 0;
+    display: flex;
+}
+
+.nav-links li {
+    margin: 0 10px;
+}
+
+.nav-links a {
+    color: #fff;
+    text-decoration: none;
+    font-weight: bold;
+    transition: color 0.3s;
+}
+
+.nav-links a:hover {
+    color: #c8e6c9;
+}
+
+/* Forms */
+form {
+    margin-bottom: 20px;
+}
+
+form .form-group {
+    margin-bottom: 15px;
+}
+
+form label {
+    display: block;
+    font-weight: bold;
+    margin-bottom: 5px;
+}
+
+form input, form select, form textarea {
+    width: 100%;
+    padding: 8px;
+    margin-bottom: 10px;
+    border: 1px solid #ccc;
+    border-radius: 4px;
+    box-sizing: border-box;
+}
+
+form input[type="text"], form input[type="number"], form select, form textarea {
+    display: block;
+    width: calc(100% - 20px); /* Match column widths by aligning with table cell padding */
+    padding: 10px;
+}
+
+form input[type="date"], form select, form textarea {
+    display: block;
+    width: 20%;
+    padding: 10px;
+}
+form input[name="priority" ], form select, form textarea {
+    display: block;
+    width: 100%;
+    padding: 10px;
+}
+form input[name="status" ], form select, form textarea {
+    display: block;
+    width: calc(100% - 20px); /* Match column widths by aligning with table cell padding */
+    padding: 10px;
+}
+form input[name="keyword" ], form select, form textarea {
+    display: block;
+    width: 50%;
+    padding: 10px;
+}
+form input[name="percentage_completion" ], form select, form textarea {
+    display: block;
+    width: 50%;
+    padding: 10px;
+}
+form button {
+    background: #4CAF50;
+    color: #fff;
+    border: none;
+    padding: 10px 15px;
+    border-radius: 4px;
+    cursor: pointer;
+    transition: background 0.3s;
+}
+
+form button:hover {
+    background: #45a049;
+}
+
+/* Tables */
+table {
+    width: 100%;
+    border-collapse: collapse;
+    margin-bottom: 20px;
+}
+
+table th, table td {
+    border: 1px solid #ddd;
+    padding: 10px;
+    text-align: left;
+    box-sizing: border-box;
+}
+
+/* Adjust column width ratios for the first table */
+.task-list th:nth-child(1) { width: 1%; }    /* ID */
+.task-list th:nth-child(2) { width: 30%; }   /* Description */
+.task-list th:nth-child(3) { width: 5%; }    /* Priority */
+.task-list th:nth-child(4) { width: 5%; }    /* Status */
+.task-list th:nth-child(5) { width: 5%; }    /* Monthly Action */
+.task-list th:nth-child(6) { width: 5%; }    /* Due Date */
+.task-list th:nth-child(7) { width: 5%; }    /* Completion */
+.task-list th:nth-child(8) { width: 15%; }   /* Actions */
+.task-list th:nth-child(9) { width: 30%; }   /* Updates */
+
+/* Adjust column width ratios for the second table */
+.action-list td:nth-child(1) { width: 5%; }    /* ID */
+.action-list td:nth-child(2) { width: 30%; }   /* Description */
+.action-list td:nth-child(3) { width: 5%; }    /* Priority */
+.action-list td:nth-child(4) { width: 5%; }    /* Due Date */
+.action-list td:nth-child(5) { width: 5%; }    /* Status */
+.action-list td:nth-child(6) { width: 5%; }    /* Completion */
+.action-list td:nth-child(7) { width: 15%; }   /* Actions */
+.action-list td:nth-child(8) { width: 30%; }   /* Updates */
+
+
+/* Adjust column width ratios for the first table */
+.history-list th:nth-child(1) { width: 1%; }    /* ID */
+.history-list th:nth-child(2) { width: 25%; }   /* Description */
+.history-list th:nth-child(3) { width: 5%; }    /* Status */
+.history-list th:nth-child(4) { width: 30%; }   /* Updates */
+.history-list th:nth-child(5) { width: 10%; }    /*  Date */
+table th {
+    background: #4CAF50;
+    color: #fff;
+    font-weight: bold;
+}
+
+table tr:nth-child(even) {
+    background: #f9f9f9;
+}
+
+table tr:hover {
+    background: #f1f1f1;
+}
+
+/* Footer */
+footer {
+    text-align: center;
+    padding: 10px 0;
+    background: #333;
+    color: #fff;
+}
+
+/* Buttons for Actions */
+form button.delete-btn {
+    background: #f44336;
+}
+ 
+.show-btn {
+    background-color: #007bff; /* Blue background */
+    color: white; /* White text */
+    font-size: 16px; /* Medium font size */
+    padding: 10px 20px; /* Padding around the button */
+    border: none; /* No border */
+    border-radius: 5px; /* Rounded corners */
+    cursor: pointer; /* Pointer cursor on hover */
+    transition: background-color 0.3s ease, transform 0.2s ease; /* Smooth transitions */
+    box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1); /* Subtle shadow */
+}
+
+.show-btn:hover {
+    background-color: #0056b3; /* Darker blue on hover */
+    transform: scale(1.05); /* Slightly larger on hover */
+}
+
+.show-btn:active {
+    background-color: #003f7f; /* Even darker blue when clicked */
+    transform: scale(1); /* Reset size on click */
+}
+
+
+form button.delete-btn:hover {
+    background: #e53935;
+}
+
+form button.status-btn {
+    background: #2196F3;
+}
+
+form button.status-btn:hover {
+    background: #1e88e5;
+}
+
+form button.update-btn {
+    background: #ff9800;
+}
+
+form button.update-btn:hover {
+    background: #fb8c00;
+}
+

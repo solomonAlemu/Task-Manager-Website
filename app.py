@@ -349,7 +349,6 @@ def monthly_progress():
     """Render the monthly progress page."""
     return render_template('monthly_progress.html')
 
-
 @app.route('/monthly-progress-data')
 def monthly_progress_data():
     """Provide data for the monthly progress chart."""
@@ -387,4 +386,4 @@ def task_data():
 
 if __name__ == '__main__':
     init_db()
-    app.run(host="0.0.0.0", port=2000, threaded=True, use_reloader=False)
+    app.run(host="0.0.0.0", port=8181, threaded=True, use_reloader=False)
