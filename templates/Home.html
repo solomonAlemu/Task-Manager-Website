@@ -113,12 +113,11 @@
 						  <option value="Completed" {% if task[2] == 'Completed' %}selected{% endif %}>Completed</option>
 						  <option value="Cancelled" {% if task[2] == 'Cancelled' %}selected{% endif %}>Cancelled</option>
 						</select>
-						<textareaf
+						<textarea
 						  name="notes"
 						  class="notes-text"
 						  placeholder="Add notes..."
-						  >{{ task[6] if task[6] else '' }}</textareaf
-						>
+						>{{ task[6] if task[6] else '' }}</textarea>
 						<button type="submit" class="status-btn">Update</button> 
 					  </form>
 

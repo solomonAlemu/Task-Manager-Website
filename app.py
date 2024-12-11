@@ -241,8 +241,6 @@ def fetch_actions():
         print(f"Database error: {e}")
         return jsonify({"success": False, "error": "Unable to fetch monthly actions"}), 500
 
-
-
 @app.route('/delete_historical', methods=['POST'])
 def delete_historical_tasks():
     """Delete historical tasks."""
@@ -355,34 +353,112 @@ def monthly_progress_data():
     try:
         with sqlite3.connect(DATABASE) as conn:
             cursor = conn.cursor()
+            
+            # 1. Priority vs Completion Percentage
+            cursor.execute('''
+                SELECT priority, 
+                       AVG(percentage_completion) AS avg_completion 
+                FROM tasks 
+                GROUP BY priority
+            ''')
+            priority_completion_data = cursor.fetchall()
+
+            # 2. Monthly Progress for Tasks
             cursor.execute('''
                 SELECT strftime('%Y-%m', due_date) AS month,
-                       AVG(percentage_completion) AS avg_completion
-                FROM tasks
+                       SUM(CASE WHEN status = 'Completed' THEN 1 ELSE 0 END) AS completed,
+                       SUM(CASE WHEN status = 'In Progress' THEN 1 ELSE 0 END) AS in_progress,
+                       SUM(CASE WHEN status = 'Open' THEN 1 ELSE 0 END) AS open
+                FROM tasks 
                 GROUP BY month
             ''')
-            data = cursor.fetchall()
+            monthly_task_progress = cursor.fetchall()
+            
+            # 3. Monthly Progress for Action Items
+            cursor.execute('''
+                SELECT strftime('%Y-%m', due_date) AS month,
+                       SUM(CASE WHEN status = 'Completed' THEN 1 ELSE 0 END) AS completed,
+                       SUM(CASE WHEN status = 'In Progress' THEN 1 ELSE 0 END) AS in_progress,
+                       SUM(CASE WHEN status = 'Open' THEN 1 ELSE 0 END) AS open
+                FROM monthly_action_items 
+                GROUP BY month
+            ''')
+            monthly_action_progress = cursor.fetchall()
+            
+            # 4. Action Item Status Breakdown
+            cursor.execute('''
+                SELECT status, COUNT(*) AS count
+                FROM monthly_action_items
+                GROUP BY status
+            ''')
+            action_status_data = cursor.fetchall()
+            status_breakdown = {row[0]: row[1] for row in action_status_data}
 
-        return jsonify({
-            "labels": [row[0] for row in data],
-            "data": [row[1] for row in data],
-        })
+            return jsonify({
+                "priority_completion": {row[0]: row[1] for row in priority_completion_data},
+                "task_progress": {
+                    "labels": [row[0] for row in monthly_task_progress],
+                    "completed": [row[1] for row in monthly_task_progress],
+                    "in_progress": [row[2] for row in monthly_task_progress],
+                    "open": [row[3] for row in monthly_task_progress],
+                },
+                "action_progress": {
+                    "labels": [row[0] for row in monthly_action_progress],
+                    "completed": [row[1] for row in monthly_action_progress],
+                    "in_progress": [row[2] for row in monthly_action_progress],
+                    "open": [row[3] for row in monthly_action_progress],
+                },
+                "status_breakdown": status_breakdown
+            })
     except sqlite3.Error as e:
         print(f"Database error: {e}")
         return jsonify({"error": "Failed to fetch progress data."}), 500
 
 @app.route('/task_charts')
 def task_charts():
+    """Render the Task Progress Charts page."""
     return render_template('task_charts.html')
 
-@app.route('/task-data')
+ 
+@app.route('/task-data', methods=['GET'])
 def task_data():
-    return jsonify({
-        "tasks": tasks,
-        "priorities": [task["priority"] for task in tasks],
-        "progress": [task["progress"] for task in tasks],
-        "due_dates": [task["due_date"] for task in tasks],
-    })
+    """Provide task data for charts and progress bars."""
+    try:
+        with sqlite3.connect(DATABASE) as conn:
+            cursor = conn.cursor()
+
+            # Fetch tasks with name, priority, progress, and due date
+            cursor.execute('''
+                SELECT 
+                    description AS name, 
+                    priority, 
+                    percentage_completion AS progress, 
+                    due_date 
+                FROM tasks
+                WHERE status IN ('Open', 'In Progress', 'Completed')
+            ''')
+            tasks = cursor.fetchall()
+
+        # Structure the data as JSON
+        task_data = {
+            "tasks": [
+                {
+                    "name": task[0],
+                    "priority": task[1],
+                    "progress": task[2],
+                    "due_date": task[3] if task[3] else "No due date"
+                }
+                for task in tasks
+            ],
+            "priorities": [task[1] for task in tasks],
+            "progress": [task[2] for task in tasks],
+        }
+
+        return jsonify(task_data)
+    except sqlite3.Error as e:
+        print(f"Database error: {e}")
+        return jsonify({"error": "Failed to fetch task data."}), 500
+
 
 if __name__ == '__main__':
     init_db()
