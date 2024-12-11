@@ -1,4 +1,4 @@
-⭐️ Generate a fully styled Task management website with a server based on python flask and sqlite3 data base library having the below features:
+⭐️A Task management website with a server based on python flask and sqlite3 data base library having the below features:
 - the data based shall include, task description, task priority, status(open,inpgress,Cloesd), percentage complition in percentage, task update status descrition, due date, date created.
 - monthly action item creator.
 - task creation with due date and priority.
