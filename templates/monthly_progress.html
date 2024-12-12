@@ -42,100 +42,37 @@
 	                    backgroundColor: "rgba(75, 192, 192, 0.5)"
 	                }]
 	            },
-	            options: {
-	                responsive: true,
-	                scales: {
-	                    y: {
-	                        beginAtZero: true,
-	                        title: { display: true, text: "Completion Percentage" }
-	                    },
-	                    x: { title: { display: true, text: "Priority" } }
-	                }
-	            }
+	            options: { responsive: true, scales: { y: { beginAtZero: true } } }
 	        });
 
-	        // Monthly Progress - Tasks
+	        // Monthly Task Progress
 	        const ctx2 = document.getElementById("taskProgressChart").getContext("2d");
 	        new Chart(ctx2, {
 	            type: "line",
 	            data: {
 	                labels: data.task_progress.labels,
 	                datasets: [
-	                    { 
-	                        label: "Completed", 
-	                        data: data.task_progress.completed, 
-	                        backgroundColor: "rgba(75, 192, 192, 0.5)", 
-	                        borderColor: "rgba(75, 192, 192, 1)", 
-	                        fill: true 
-	                    },
-	                    { 
-	                        label: "In Progress", 
-	                        data: data.task_progress.in_progress, 
-	                        backgroundColor: "rgba(255, 159, 64, 0.5)", 
-	                        borderColor: "rgba(255, 159, 64, 1)", 
-	                        fill: true 
-	                    },
-	                    { 
-	                        label: "Open", 
-	                        data: data.task_progress.open, 
-	                        backgroundColor: "rgba(255, 99, 132, 0.5)", 
-	                        borderColor: "rgba(255, 99, 132, 1)", 
-	                        fill: true 
-	                    }
+	                    { label: "Completed", data: data.task_progress.completed, backgroundColor: "rgba(75, 192, 192, 0.5)" },
+	                    { label: "In Progress", data: data.task_progress.in_progress, backgroundColor: "rgba(255, 159, 64, 0.5)" },
+	                    { label: "Open", data: data.task_progress.open, backgroundColor: "rgba(255, 99, 132, 0.5)" }
 	                ]
 	            },
-	            options: {
-	                responsive: true,
-	                scales: {
-	                    y: {
-	                        beginAtZero: true,
-	                        title: { display: true, text: "Number of Tasks" }
-	                    },
-	                    x: { title: { display: true, text: "Month" } }
-	                }
-	            }
+	            options: { responsive: true, scales: { y: { beginAtZero: true } } }
 	        });
 
-	        // Monthly Progress - Action Items
+	        // Monthly Action Item Progress
 	        const ctx3 = document.getElementById("actionProgressChart").getContext("2d");
 	        new Chart(ctx3, {
 	            type: "line",
 	            data: {
 	                labels: data.action_progress.labels,
 	                datasets: [
-	                    { 
-	                        label: "Completed", 
-	                        data: data.action_progress.completed, 
-	                        backgroundColor: "rgba(75, 192, 192, 0.5)", 
-	                        borderColor: "rgba(75, 192, 192, 1)", 
-	                        fill: true 
-	                    },
-	                    { 
-	                        label: "In Progress", 
-	                        data: data.action_progress.in_progress, 
-	                        backgroundColor: "rgba(255, 159, 64, 0.5)", 
-	                        borderColor: "rgba(255, 159, 64, 1)", 
-	                        fill: true 
-	                    },
-	                    { 
-	                        label: "Open", 
-	                        data: data.action_progress.open, 
-	                        backgroundColor: "rgba(255, 99, 132, 0.5)", 
-	                        borderColor: "rgba(255, 99, 132, 1)", 
-	                        fill: true 
-	                    }
+	                    { label: "Completed", data: data.action_progress.completed, backgroundColor: "rgba(75, 192, 192, 0.5)" },
+	                    { label: "In Progress", data: data.action_progress.in_progress, backgroundColor: "rgba(255, 159, 64, 0.5)" },
+	                    { label: "Open", data: data.action_progress.open, backgroundColor: "rgba(255, 99, 132, 0.5)" }
 	                ]
 	            },
-	            options: {
-	                responsive: true,
-	                scales: {
-	                    y: {
-	                        beginAtZero: true,
-	                        title: { display: true, text: "Number of Action Items" }
-	                    },
-	                    x: { title: { display: true, text: "Month" } }
-	                }
-	            }
+	            options: { responsive: true, scales: { y: { beginAtZero: true } } }
 	        });
 
 	        // Action Item Status Breakdown
@@ -156,7 +93,6 @@
 	        console.error("Error loading chart data:", error);
 	    }
 	});
-
 
 </script>
 {% endblock %}

@@ -14,7 +14,66 @@
 	<link rel="icon" href="/static/task_mgr.png?v=1" type="image/png">
     <!-- Include Chart.js for charts -->
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+	<style>
+	body {
+	    font-family: Arial, sans-serif;
+		background-image: url("{{ url_for('static', filename='pexels-lum3n-44775-399161.jpg') }}");
+		background-size: cover;
+		background-position: Left;
+		background-attachment: fixed;
+	    line-height: 1.6;
+	    margin: 0;
+	    padding: 0;
+	    background-color: #f4f4f9;
+	    color: #333;
+	}
+	/* Navigation */
+	header {
+	    background: rgb(219, 153, 166);
+	    color: #fff;
+	    padding: 10px 0;
+	}
 
+	header nav {
+	    max-width: 1200px;
+	    margin: 0 auto;
+	    display: flex;
+	    justify-content: space-between;
+	    align-items: center;
+	}
+
+	.nav-links {
+	    list-style: none;
+	    padding: 0;
+	    display: flex;
+	}
+
+	.nav-links li {
+	    margin: 0 10px;
+	}
+
+	.nav-links a {
+	    color: #fff;
+	    text-decoration: none;
+	    font-weight: bold;
+	    transition: color 0.3s;
+	}
+
+	.nav-links a:hover {
+	    color: #c8e6c9;
+	}
+
+	footer {
+	    background-color: rgb(219, 153, 166);
+		background: rgb(219, 153, 166);
+	    color: white;
+	    text-align: center;
+	    padding: 1rem;
+	    position: fixed;
+	    bottom: 0;
+	    width: 100%;
+	}
+	</style>
 </head>
 <body>
     <!-- Header Section -->

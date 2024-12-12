@@ -1,13 +1,5 @@
 /* General Styles */
-body {
-    font-family: Arial, sans-serif;
-    line-height: 1.6;
-    margin: 0;
-    padding: 0;
-    background-color: #f4f4f9;
-    color: #333;
-}
-
+ 
 .container {
     max-width: 1500px;
     margin: 20px auto;
@@ -22,41 +14,6 @@ h2 {
     margin-bottom: 20px;
 }
 
-/* Navigation */
-header {
-    background: #4CAF50;
-    color: #fff;
-    padding: 10px 0;
-}
-
-header nav {
-    max-width: 1200px;
-    margin: 0 auto;
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-}
-
-.nav-links {
-    list-style: none;
-    padding: 0;
-    display: flex;
-}
-
-.nav-links li {
-    margin: 0 10px;
-}
-
-.nav-links a {
-    color: #fff;
-    text-decoration: none;
-    font-weight: bold;
-    transition: color 0.3s;
-}
-
-.nav-links a:hover {
-    color: #c8e6c9;
-}
 
 /* Forms */
 form {
@@ -185,10 +142,13 @@ table tr:hover {
 
 /* Footer */
 footer {
+    background-color: #4CAF50;
+    color: white;
     text-align: center;
-    padding: 10px 0;
-    background: #333;
-    color: #fff;
+    padding: 1rem;
+    position: fixed;
+    bottom: 0;
+    width: 100%;
 }
 
 /* Buttons for Actions */

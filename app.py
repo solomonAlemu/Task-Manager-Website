@@ -81,6 +81,7 @@ def home():
             
             # Fetch monthly action items for task creation dropdown
             cursor.execute("SELECT id, description, priority FROM monthly_action_items WHERE status IN ('Open', 'In Progress')")
+            
             monthly_actions = cursor.fetchall()
             print("Monthly Actions:", monthly_actions)  # Debug print
         
@@ -261,30 +262,24 @@ def delete_historical_tasks():
 
 @app.route('/monthly-action', methods=['GET', 'POST'])
 def monthly_action():
-    """Manage monthly action items."""
-    if request.method == 'POST':
-        description = request.form.get('description')
-        priority = request.form.get('priority', 'Medium')
-        due_date = request.form.get('due_date')
-        notes = request.form.get('notes', '')
+    # ... (previous code remains the same)
 
-        if not description:
-            return "Description is required.", 400
-
-        try:
-            with sqlite3.connect(DATABASE) as conn:
-                cursor = conn.cursor()
-                cursor.execute('''
-                    INSERT INTO monthly_action_items 
-                    (description, priority, due_date, notes, status)
-                    VALUES (?, ?, ?, ?, 'Open')
-                ''', (description, priority, due_date, notes))
-                conn.commit()
-            return redirect(url_for('monthly_action'))
-        except sqlite3.Error as e:
-            print(f"Database error: {e}")
-            return "Error: Unable to add action item.", 500
-
+    # Fetch existing monthly action items
+    try:
+        with sqlite3.connect(DATABASE) as conn:
+            cursor = conn.cursor()
+            cursor.execute('''
+                SELECT id, description, priority, status, 
+                       due_date, percentage_completion, notes
+                FROM monthly_action_items
+                WHERE status IN ('Open', 'In Progress')
+                ORDER BY created_at DESC
+            ''')
+            monthly_actions = cursor.fetchall()
+        return render_template('monthly_action.html', monthly_actions=monthly_actions)
+    except sqlite3.Error as e:
+        print(f"Database error: {e}")
+        return "Error: Unable to fetch monthly action items.", 500
     # Fetch existing monthly action items
     try:
         with sqlite3.connect(DATABASE) as conn:
@@ -303,7 +298,7 @@ def monthly_action():
     
 @app.route('/update_monthly_action/<int:action_id>', methods=['POST'])
 def update_monthly_action(action_id):
-    """Update a monthly action item."""
+    """Update a monthly action status."""
     status = request.form.get('status', 'Open')
     percentage_completion = request.form.get('percentage_completion', '0').strip()
     notes = request.form.get('notes', '').strip()
