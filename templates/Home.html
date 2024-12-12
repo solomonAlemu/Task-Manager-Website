@@ -101,11 +101,6 @@
 						  value="{{ task[4] }}"
 						  required
 						/>
-						<button type="submit" class="update-btn">Update</button>
-					  </form>
-
-					  <!-- Update Task Status -->
-					  <form action="/update/{{ task[0] }}" method="POST" class="form-container">
 						<label for="status">Task Status</label>
 						<select name="status" id="status">
 						  <option value="Open" {% if task[2] == 'Open' %}selected{% endif %}>Open</option>

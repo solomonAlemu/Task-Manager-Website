@@ -25,53 +25,121 @@
                 data: {
                     labels: data.tasks.map(task => task.name),
                     datasets: [{
-                        label: 'Priority',
-                        data: data.priorities,
-                        backgroundColor: 'rgba(255, 99, 132, 0.2)',
-                        borderColor: 'rgba(255, 99, 132, 1)',
+                        label: 'Priority Levels',
+                        data: data.tasks.map(task => {
+                            // Map priority to numeric values for visualization
+                            const priorityMap = { 'Low': 1, 'Medium': 2, 'High': 3 };
+                            return priorityMap[task.priority] || 1;
+                        }),
+                        backgroundColor: data.tasks.map(task => {
+                            // Color-code based on priority
+                            if (task.priority === 'High') return 'rgba(255, 99, 132, 0.6)';
+                            if (task.priority === 'Medium') return 'rgba(255, 159, 64, 0.6)';
+                            return 'rgba(75, 192, 192, 0.6)';
+                        }),
+                        borderColor: data.tasks.map(task => {
+                            if (task.priority === 'High') return 'rgba(255, 99, 132, 1)';
+                            if (task.priority === 'Medium') return 'rgba(255, 159, 64, 1)';
+                            return 'rgba(75, 192, 192, 1)';
+                        }),
                         borderWidth: 1
                     }, {
                         label: 'Progress (%)',
                         data: data.progress,
-                        backgroundColor: 'rgba(75, 192, 192, 0.2)',
-                        borderColor: 'rgba(75, 192, 192, 1)',
-                        borderWidth: 1
+                        backgroundColor: 'rgba(54, 162, 235, 0.5)',
+                        borderColor: 'rgba(54, 162, 235, 1)',
+                        type: 'line',
+                        borderWidth: 2,
+                        fill: false
                     }]
                 },
                 options: {
                     responsive: true,
+                    plugins: {
+                        title: {
+                            display: true,
+                            text: 'Task Priority and Progress Overview'
+                        },
+                        tooltip: {
+                            callbacks: {
+                                label: function(context) {
+                                    const taskIndex = context.dataIndex;
+                                    const task = data.tasks[taskIndex];
+                                    if (context.datasetIndex === 0) {
+                                        return `Priority: ${task.priority}`;
+                                    }
+                                    return `Progress: ${task.progress}%`;
+                                }
+                            }
+                        }
+                    },
                     scales: {
-                        y: { beginAtZero: true }
+                        y: { 
+                            beginAtZero: true,
+                            title: {
+                                display: true,
+                                text: 'Priority / Progress'
+                            }
+                        }
                     }
                 }
             });
 
-            // Due Date Progress Bars
+            // Enhanced Due Date Progress Bars
             const progressBars = document.getElementById('progressBars');
-            data.tasks.forEach(task => {
-                const barContainer = document.createElement('div');
-                barContainer.style.margin = '10px 0';
+            data.tasks
+                .sort((a, b) => new Date(a.due_date) - new Date(b.due_date)) // Sort by due date
+                .forEach(task => {
+                    const barContainer = document.createElement('div');
+                    barContainer.style.margin = '15px 0';
+                    barContainer.style.display = 'flex';
+                    barContainer.style.alignItems = 'center';
 
-                const label = document.createElement('span');
-                label.textContent = `${task.name} (${task.due_date}): `;
-                barContainer.appendChild(label);
+                    const label = document.createElement('div');
+                    label.style.width = '30%';
+                    label.style.fontWeight = 'bold';
+                    label.innerHTML = `
+                        <span>${task.name}</span><br>
+                        <small style="color: #666;">${task.due_date}</small>
+                    `;
+                    barContainer.appendChild(label);
 
-                const progressBar = document.createElement('div');
-                progressBar.style.width = '100%';
-                progressBar.style.backgroundColor = '#eee';
-                progressBar.style.borderRadius = '5px';
+                    const progressBar = document.createElement('div');
+                    progressBar.style.width = '70%';
+                    progressBar.style.backgroundColor = '#eee';
+                    progressBar.style.borderRadius = '5px';
+                    progressBar.style.position = 'relative';
+                    progressBar.style.height = '25px';
 
-                const progress = document.createElement('div');
-                progress.style.width = `${task.progress}%`;
-                progress.style.height = '20px';
-                progress.style.backgroundColor = task.progress > 75 ? 'green' : (task.progress > 50 ? 'orange' : 'red');
-                progress.style.borderRadius = '5px';
+                    const progress = document.createElement('div');
+                    progress.style.width = `${task.progress}%`;
+                    progress.style.height = '100%';
+                    progress.style.backgroundColor = 
+                        task.progress > 75 ? 'green' : 
+                        (task.progress > 50 ? 'orange' : 'red');
+                    progress.style.borderRadius = '5px';
+                    progress.style.transition = 'width 0.5s ease-in-out';
 
-                progressBar.appendChild(progress);
-                barContainer.appendChild(progressBar);
+                    const progressText = document.createElement('span');
+                    progressText.textContent = `${task.progress}%`;
+                    progressText.style.position = 'absolute';
+                    progressText.style.right = '5px';
+                    progressText.style.top = '50%';
+                    progressText.style.transform = 'translateY(-50%)';
+                    progressText.style.color = 'white';
+                    progressText.style.fontWeight = 'bold';
 
-                progressBars.appendChild(barContainer);
-            });
+                    progressBar.appendChild(progress);
+                    progressBar.appendChild(progressText);
+                    barContainer.appendChild(progressBar);
+
+                    progressBars.appendChild(barContainer);
+                });
+        })
+        .catch(error => {
+            console.error('Error fetching task data:', error);
+            const progressBars = document.getElementById('progressBars');
+            progressBars.innerHTML = `<p style="color: red;">Failed to load task data: ${error.message}</p>`;
         });
 </script>
 {% endblock %}
