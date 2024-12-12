@@ -67,7 +67,7 @@ form input[name="keyword" ], form select, form textarea {
 }
 form input[name="percentage_completion" ], form select, form textarea {
     display: block;
-    width: 50%;
+    width: calc(100% - 20px); /* Match column widths by aligning with table cell padding */
     padding: 10px;
 }
 form button {
@@ -100,14 +100,15 @@ table th, table td {
 
 /* Adjust column width ratios for the first table */
 .task-list th:nth-child(1) { width: 1%; }    /* ID */
-.task-list th:nth-child(2) { width: 30%; }   /* Description */
-.task-list th:nth-child(3) { width: 5%; }    /* Priority */
-.task-list th:nth-child(4) { width: 5%; }    /* Status */
-.task-list th:nth-child(5) { width: 5%; }    /* Monthly Action */
-.task-list th:nth-child(6) { width: 5%; }    /* Due Date */
-.task-list th:nth-child(7) { width: 5%; }    /* Completion */
-.task-list th:nth-child(8) { width: 15%; }   /* Actions */
-.task-list th:nth-child(9) { width: 30%; }   /* Updates */
+.task-list th:nth-child(2) { width: 5%; }   /* Assigned Person */
+.task-list th:nth-child(3) { width: 30%; }   /* Description */
+.task-list th:nth-child(4) { width: 5%; }    /* Priority */
+.task-list th:nth-child(5) { width: 5%; }    /* Status */
+.task-list th:nth-child(6) { width: 5%; }    /* Monthly Action */
+.task-list th:nth-child(7) { width: 5%; }    /* Due Date */
+.task-list th:nth-child(8) { width: 5%; }    /* Completion */
+.task-list th:nth-child(9) { width: 20%; }   /* Actions */
+.task-list th:nth-child(10) { width: 30%; }   /* Updates */
 
 /* Adjust column width ratios for the second table */
 .action-list td:nth-child(1) { width: 5%; }    /* ID */
@@ -122,10 +123,11 @@ table th, table td {
 
 /* Adjust column width ratios for the first table */
 .history-list th:nth-child(1) { width: 1%; }    /* ID */
-.history-list th:nth-child(2) { width: 25%; }   /* Description */
-.history-list th:nth-child(3) { width: 5%; }    /* Status */
-.history-list th:nth-child(4) { width: 30%; }   /* Updates */
-.history-list th:nth-child(5) { width: 10%; }    /*  Date */
+.history-list th:nth-child(2) { width: 10%; }   /* Assigned Person */
+.history-list th:nth-child(3) { width: 30%; }   /* Description */
+.history-list th:nth-child(4) { width: 5%; }    /* Status */
+.history-list th:nth-child(5) { width: 30%; }   /* Updates */
+.history-list th:nth-child(6) { width: 10%; }    /*  Date */
 table th {
     background: #4CAF50;
     color: #fff;
@@ -197,5 +199,47 @@ form button.update-btn {
 
 form button.update-btn:hover {
     background: #fb8c00;
+}
+/* Grid container for form layout */
+.grid-container {
+    display: grid;
+    grid-template-columns: 1fr 1fr; /* Two columns */
+    gap: 20px; /* Space between grid items */
+    align-items: center;
+    margin-bottom: 20px;
+}
+
+/* Individual grid items */
+.grid-item {
+    display: flex;
+    flex-direction: column;
+}
+
+/* Style for buttons */
+.status-btn {
+    background-color: #4CAF50;
+    color: white;
+    padding: 10px 20px;
+    border: none;
+    cursor: pointer;
+}
+
+.delete-btn {
+    background-color: #f44336;
+    color: white;
+    padding: 10px 20px;
+    border: none;
+    cursor: pointer;
+}
+
+/* Styling for form fields */
+input,
+select,
+textarea {
+    width: 100%;
+    padding: 10px;
+    margin-top: 5px;
+    border: 1px solid #ccc;
+    border-radius: 4px;
 }
 

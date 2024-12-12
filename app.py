@@ -20,7 +20,8 @@ def init_db():
         # Tasks table (existing)
         cursor.execute('''
         CREATE TABLE IF NOT EXISTS tasks (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            id INTEGER PRIMARY KEY AUTOINCREMENT, 
+            assigned_person TEXT DEFAULT NULL,
             description TEXT NOT NULL,
             priority TEXT NOT NULL,
             status TEXT NOT NULL DEFAULT 'Open',
@@ -33,7 +34,6 @@ def init_db():
             FOREIGN KEY(monthly_action_id) REFERENCES monthly_action_items(id)
         )
         ''')
-
         # Monthly Action Items table (new)
         cursor.execute('''
         CREATE TABLE IF NOT EXISTS monthly_action_items (
@@ -68,7 +68,7 @@ def home():
             # Fetch tasks with their linked Monthly Action Item description
             cursor.execute("""
                 SELECT 
-                    tasks.id, tasks.description, tasks.priority, tasks.status, 
+                    tasks.id,tasks.assigned_person, tasks.description, tasks.priority, tasks.status, 
                     tasks.percentage_completion, tasks.notes, tasks.updates, 
                     tasks.due_date, monthly_action_items.description AS monthly_action_description
                 FROM tasks
@@ -94,6 +94,7 @@ def home():
 @app.route('/add', methods=['POST'])
 def add_task():
     """Add a new task with optional monthly action item link."""
+    assigned_person = request.form.get('assigned_person')
     description = request.form.get('description', '').strip()
     priority = request.form.get('priority', 'Medium')
     due_date = request.form.get('due_date', '').strip()
@@ -106,9 +107,9 @@ def add_task():
         with sqlite3.connect(DATABASE) as conn:
             cursor = conn.cursor()
             cursor.execute("""
-                INSERT INTO tasks (description, priority, due_date, status, monthly_action_id)
-                VALUES (?, ?, ?, 'Open', ?)
-            """, (description, priority, due_date, monthly_action_id))
+                INSERT INTO tasks (assigned_person, description, priority, due_date, status, monthly_action_id)
+                VALUES (?,?, ?, ?, 'Open', ?)
+            """, (assigned_person, description, priority, due_date, monthly_action_id))
             conn.commit()
         return redirect(url_for('home'))
     except sqlite3.Error as e:
@@ -118,6 +119,7 @@ def add_task():
 @app.route('/update/<int:task_id>', methods=['POST'])
 def update_task(task_id):
     """Update task details."""
+    assigned_person = request.form.get('assigned_person')
     status = request.form.get('status', 'Open')
     percentage_completion = request.form.get('percentage_completion', '0').strip()
     notes = request.form.get('notes', '').strip()
@@ -138,12 +140,11 @@ def update_task(task_id):
                 + f"\n\n== Update ({datetime.now().strftime('%Y-%m-%d %H:%M')})\n{notes or 'No notes'}Status: {status}\n"
             )
             #update_entry = f"Updated on {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}: {notes or 'No notes'}\n"
-            new_updates = updates + update_entry
-
+ 
             cursor.execute("""
-                UPDATE tasks SET status = ?, percentage_completion = ?, notes = ?, updates = ?
+                UPDATE tasks SET assigned_person = ?, status = ?, percentage_completion = ?, notes = ?, updates = ?
                 WHERE id = ?
-            """, (status, percentage_completion, notes, new_updates, task_id))
+            """, (assigned_person, status, percentage_completion, notes, update_entry, task_id))
             conn.commit()
         return redirect(url_for('home'))
     except sqlite3.Error as e:
@@ -173,7 +174,7 @@ def fetch_tasks():
     try:
         with sqlite3.connect(DATABASE) as conn:
             cursor = conn.cursor()
-            query = "SELECT id, description, status, notes, updates, created_at FROM tasks WHERE 1=1"
+            query = "SELECT id,assigned_person, description, status, notes, updates, created_at FROM tasks WHERE 1=1"
             params = []
 
             if status:
@@ -189,7 +190,7 @@ def fetch_tasks():
         return jsonify({
             "success": True,
             "tasks": [
-                {"id": task[0], "description": task[1], "status": task[2], "notes": task[3], "updates": task[4], "created_at": task[5]}
+                {"id": task[0],"assigned_person": task[1], "description": task[2], "status": task[3], "notes": task[4], "updates": task[5], "created_at": task[6]}
                 for task in tasks
             ]
         })

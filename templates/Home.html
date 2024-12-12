@@ -34,7 +34,10 @@
 			        {% endfor %}
 			    </select>
 			</div>
-
+			<div class="form-group">
+			    <label for="assigned_person">Assigned Person</label>
+			    <input type="text" name="assigned_person">
+			</div>
             <div class="form-group">
                 <label for="due_date">Due Date</label>
                 <input type="date" name="due_date">
@@ -68,6 +71,7 @@
             <thead>
                 <tr>
                     <th>ID</th>
+					<th>Assigned Person</th>
                     <th>Description</th>
                     <th>Priority</th>
                     <th>Status</th>
@@ -82,46 +86,70 @@
                 {% for task in tasks %}
                 <tr>
                     <td>{{ task[0] }}</td>
-                    <td>{{ task[1] }}</td>
+                    <td>{{ task[1] or "Not Assigned" }}</td>
                     <td>{{ task[2] }}</td>
                     <td>{{ task[3] }}</td>
-					<td>{{ task[8] if task[8] else 'No linked action' }}</td>>
-                    <td>{{ task[7] }}</td>
-                    <td>{{ task[4] }}</td>
+					<td>{{ task[4] }}</td>
+					<td>{{ task[5] if task[9] else 'No linked action' }}</td>>
+                    <td>{{ task[8] }}</td>
+                    <td>{{ task[5] }}</td>
 					<td>
-					  <!-- Update Task Progress -->
-					  <form action="{{ url_for('update_task', task_id=task[0]) }}" method="POST" class="form-container">
-						<label for="progress">Progress (%)</label>
-						<input
-						  type="number"
-						  id="progress"
-						  name="percentage_completion"
-						  min="0"
-						  max="100"
-						  value="{{ task[4] }}"
-						  required
-						/>
-						<label for="status">Task Status</label>
-						<select name="status" id="status">
-						  <option value="Open" {% if task[2] == 'Open' %}selected{% endif %}>Open</option>
-						  <option value="In Progress" {% if task[2] == 'In Progress' %}selected{% endif %}>In Progress</option>
-						  <option value="Completed" {% if task[2] == 'Completed' %}selected{% endif %}>Completed</option>
-						  <option value="Cancelled" {% if task[2] == 'Cancelled' %}selected{% endif %}>Cancelled</option>
-						</select>
-						<textarea
-						  name="notes"
-						  class="notes-text"
-						  placeholder="Add notes..."
-						>{{ task[6] if task[6] else '' }}</textarea>
-						<button type="submit" class="status-btn">Update</button> 
-					  </form>
+					    <!-- Update Task Progress -->
+					    <form action="{{ url_for('update_task', task_id=task[0]) }}" method="POST" class="form-container">
+					        <div class="grid-container">
+					            <div class="grid-item">
+					                <label for="progress">Progress (%)</label>
+					                <input
+					                    type="number"
+					                    id="progress"
+					                    name="percentage_completion"
+					                    min="0"
+					                    max="100"
+					                    value="{{ task[5] }}"
+					                    required
+					                />
+					            </div>
+					            <div class="grid-item">
+					                <label for="status">Task Status</label>
+					                <select name="status" id="status">
+					                    <option value="Open" {% if task[2] == 'Open' %}selected{% endif %}>Open</option>
+					                    <option value="In Progress" {% if task[2] == 'In Progress' %}selected{% endif %}>In Progress</option>
+					                    <option value="Completed" {% if task[2] == 'Completed' %}selected{% endif %}>Completed</option>
+					                    <option value="Cancelled" {% if task[2] == 'Cancelled' %}selected{% endif %}>Cancelled</option>
+					                </select>
+					            </div>
+					            <div class="grid-item">
+					                <label for="notes">Notes</label>
+					                <textarea
+					                    name="notes"
+					                    class="notes-text"
+					                    placeholder="Add notes..."
+					                ></textarea>
+					            </div>
+								<div class="form-group">
+								    <label for="assigned_person">Assigned Person</label>
+								    <input type="text" name="assigned_person" value="{{ task[1] }}">
+								</div>
+					            <div class="grid-item">
+					                <button type="submit" class="status-btn">Update</button>
+					            </div>
+					        </div>
+					    </form>
 
-					  <!-- Delete Task -->
-					  <form action="/delete/{{ task[0] }}" method="POST" class="delete-form">
-						<button type="submit" class="delete-btn" onclick="return confirm('Are you sure you want to delete this item?')">Delete</button>
-					  </form>
+					    <!-- Delete Task -->
+					    <form action="/delete/{{ task[0] }}" method="POST" class="delete-form">
+					        <button
+					            type="submit"
+					            class="delete-btn"
+					            onclick="return confirm('Are you sure you want to delete this item?')"
+					        >
+					            Delete
+					        </button>
+					    </form>
+						
 					</td>
-				    <td>{{ task[5] }}</td>
+
+				    <td><pre>{{ task[7] }}</pre></td>
                 </tr>
                 {% endfor %}
             </tbody>
@@ -160,6 +188,7 @@
 								</tr>							
 	                            <tr>
 	                                <th>ID</th>
+									<th>Assigned Person</th>
 	                                <th>Description</th>
 	                                <th>Status</th>
 	                                <th>Updates</th>
@@ -174,6 +203,7 @@
 
 	                            <tr>
 	                                <td>${task.id}</td>
+									<td>${task.assigned_person}</td>
 	                                <td>${task.description}</td>
 	                                <td>${task.status}</td>
 	                                <td>${task.notes || ''}</td>
