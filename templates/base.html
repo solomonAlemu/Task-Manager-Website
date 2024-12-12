@@ -38,8 +38,9 @@
 	}
 
 	header img {
-	    height: 60px; /* Adjust the height as needed */
+	    height: 100px; /* Adjust the height as needed */
 	    margin-right: 10px; /* Space between the image and the text */
+		border-radius: 15px;
 	}
 
 	header nav {
@@ -73,11 +74,12 @@
 	}
 
 	footer {
-	    background-color: #45a049;
-		background: #45a049;
+		background-color: #45a049;
+	    background: #45a049;
 	    color: white;
 	    text-align: center;
-	    padding: 1rem;
+	    padding: 0.5rem; /* Reduced padding to shrink thickness */
+	    line-height: .1; /* Adjust line height for more compact text */
 	    position: fixed;
 	    bottom: 0;
 	    width: 100%;
@@ -87,7 +89,7 @@
 <body>
     <!-- Header Section -->
     <header>
-		<img src="/static/et-logo-04.png" alt="Header Image"> 
+		<img src="/static/et-logo-05.png" alt="Header Image"> 
         <nav>
             <ul class="nav-links">
                 <li><a href="{{ url_for('home') }}">Home</a></li>

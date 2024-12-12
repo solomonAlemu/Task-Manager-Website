@@ -63,8 +63,6 @@
         </form>
         <div id="taskResults"></div> <!-- Container to display fetched task results -->
     </section>
-
-    <!-- Daily Task List Section -->
     <section>
         <h2>Daily Task List</h2>
         {% if tasks %}
@@ -91,7 +89,7 @@
                     <td>{{ task[2] }}</td>
                     <td>{{ task[3] }}</td>
 					<td>{{ task[4] }}</td>
-					<td>{{ task[9] if task[9] else 'No linked action' }}</td>>
+					<td>{{ task[9] if task[9] else 'No linked action' }}</td>
                     <td>{{ task[8] }}</td>
                     <td>{{ task[5] }} %</td>
 					<td>

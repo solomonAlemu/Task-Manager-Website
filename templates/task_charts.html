@@ -5,7 +5,7 @@
     <h2>Task Charts</h2>
     <div>
         <h3>Priority vs. Progress</h3>
-        <canvas id="priorityChart" width="200" height="100"></canvas>
+        <canvas id="priorityChart" width="75" height="25"></canvas>
     </div>
     <div>
         <h3>Due Date Progress</h3>
@@ -25,32 +25,24 @@
                 data: {
                     labels: data.tasks.map(task => task.name),
                     datasets: [{
-                        label: 'Priority Levels',
-                        data: data.tasks.map(task => {
-                            // Map priority to numeric values for visualization
-                            const priorityMap = { 'Low': 1, 'Medium': 2, 'High': 3 };
-                            return priorityMap[task.priority] || 1;
-                        }),
+                        label: 'Task Progress (%)',
+                        data: data.tasks.map(task => task.progress),
                         backgroundColor: data.tasks.map(task => {
-                            // Color-code based on priority
-                            if (task.priority === 'High') return 'rgba(255, 99, 132, 0.6)';
-                            if (task.priority === 'Medium') return 'rgba(255, 159, 64, 0.6)';
-                            return 'rgba(75, 192, 192, 0.6)';
+                            if (task.priority === 'High') return 'rgba(255, 99, 132, 0.8)'; // Red
+                            if (task.priority === 'Medium') return 'rgba(255, 205, 86, 0.8)'; // Yellow
+                            return 'rgba(75, 192, 192, 0.8)'; // Green
                         }),
                         borderColor: data.tasks.map(task => {
                             if (task.priority === 'High') return 'rgba(255, 99, 132, 1)';
-                            if (task.priority === 'Medium') return 'rgba(255, 159, 64, 1)';
+                            if (task.priority === 'Medium') return 'rgba(255, 205, 86, 1)';
                             return 'rgba(75, 192, 192, 1)';
                         }),
-                        borderWidth: 1
-                    }, {
-                        label: 'Progress (%)',
-                        data: data.progress,
-                        backgroundColor: 'rgba(54, 162, 235, 0.5)',
-                        borderColor: 'rgba(54, 162, 235, 1)',
-                        type: 'line',
-                        borderWidth: 2,
-                        fill: false
+                        borderWidth: 1,
+                        hoverBackgroundColor: data.tasks.map(task => {
+                            if (task.priority === 'High') return 'rgba(255, 99, 132, 0.9)';
+                            if (task.priority === 'Medium') return 'rgba(255, 205, 86, 0.9)';
+                            return 'rgba(75, 192, 192, 0.9)';
+                        })
                     }]
                 },
                 options: {
@@ -58,27 +50,54 @@
                     plugins: {
                         title: {
                             display: true,
-                            text: 'Task Priority and Progress Overview'
+                            text: 'Task Priority and Progress Overview',
+                            font: {
+                                size: 18, // Increased title font size
+                                weight: 'bold'
+                            }
                         },
                         tooltip: {
+                            bodyFont: {
+                                size: 14 // Increased tooltip font size
+                            },
                             callbacks: {
                                 label: function(context) {
                                     const taskIndex = context.dataIndex;
                                     const task = data.tasks[taskIndex];
-                                    if (context.datasetIndex === 0) {
-                                        return `Priority: ${task.priority}`;
-                                    }
-                                    return `Progress: ${task.progress}%`;
+                                    return `${task.name}: ${task.progress}% (Priority: ${task.priority})`;
                                 }
                             }
                         }
                     },
                     scales: {
-                        y: { 
-                            beginAtZero: true,
+                        x: {
+                            ticks: {
+                                font: {
+                                    size: 14 // Increased font size for x-axis labels
+                                }
+                            },
                             title: {
                                 display: true,
-                                text: 'Priority / Progress'
+                                text: 'Tasks',
+                                font: {
+                                    size: 16 // Increased font size for x-axis title
+                                }
+                            }
+                        },
+                        y: {
+                            ticks: {
+                                font: {
+                                    size: 14 // Increased font size for y-axis labels
+                                }
+                            },
+                            beginAtZero: true,
+                            max: 100,
+                            title: {
+                                display: true,
+                                text: 'Progress (%)',
+                                font: {
+                                    size: 16 // Increased font size for y-axis title
+                                }
                             }
                         }
                     }
@@ -100,7 +119,7 @@
                     label.style.fontWeight = 'bold';
                     label.innerHTML = `
                         <span>${task.name}</span><br>
-                        <small style="color: #666;">${task.due_date}</small>
+                        <small style="color: #666;">${task.due_date || 'No Due Date'}</small>
                     `;
                     barContainer.appendChild(label);
 
@@ -109,7 +128,7 @@
                     progressBar.style.backgroundColor = '#eee';
                     progressBar.style.borderRadius = '5px';
                     progressBar.style.position = 'relative';
-                    progressBar.style.height = '25px';
+                    progressBar.style.height = '20px'; /* Reduced height for a slimmer look */
 
                     const progress = document.createElement('div');
                     progress.style.width = `${task.progress}%`;
