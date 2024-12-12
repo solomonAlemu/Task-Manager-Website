@@ -27,10 +27,19 @@
 	    color: #333;
 	}
 	/* Navigation */
+ 
 	header {
 	    background: #45a049;
 	    color: #fff;
 	    padding: 10px 0;
+	    display: flex;
+	    align-items: center; /* Centers items vertically */
+	    justify-content: flex-start; /* Align items to the left */
+	}
+
+	header img {
+	    height: 60px; /* Adjust the height as needed */
+	    margin-right: 10px; /* Space between the image and the text */
 	}
 
 	header nav {
@@ -38,8 +47,9 @@
 	    margin: 0 auto;
 	    display: flex;
 	    justify-content: space-between;
-	    align-items: center;
+	    align-items: center; /* Centers items vertically */
 	}
+
 
 	.nav-links {
 	    list-style: none;
@@ -77,6 +87,7 @@
 <body>
     <!-- Header Section -->
     <header>
+		<img src="/static/et-logo-04.png" alt="Header Image"> 
         <nav>
             <ul class="nav-links">
                 <li><a href="{{ url_for('home') }}">Home</a></li>

@@ -5,7 +5,7 @@
     <h2>Task Charts</h2>
     <div>
         <h3>Priority vs. Progress</h3>
-        <canvas id="priorityChart" width="400" height="200"></canvas>
+        <canvas id="priorityChart" width="200" height="100"></canvas>
     </div>
     <div>
         <h3>Due Date Progress</h3>
@@ -114,9 +114,23 @@
                     const progress = document.createElement('div');
                     progress.style.width = `${task.progress}%`;
                     progress.style.height = '100%';
-                    progress.style.backgroundColor = 
-                        task.progress > 75 ? 'green' : 
-                        (task.progress > 50 ? 'orange' : 'red');
+					let color;
+					if (task.progress > 90) {
+					    color = 'linear-gradient(to right, #228B22, #006400)'; // Dark Green to Green
+					} else if (task.progress > 75) {
+					    color = 'linear-gradient(to right, #228B22, #32CD32)'; // Light Green to Green
+					} else if (task.progress > 60) {
+					    color = 'linear-gradient(to right, #ADFF2F, #32CD32)'; // Yellow Green to Light Green
+					} else if (task.progress > 45) {
+					    color = 'linear-gradient(to right, #FFFF00, #ADFF2F)'; // Yellow to Yellow Green
+					} else if (task.progress > 30) {
+					    color = 'linear-gradient(to right, #FFA500, #FFFF00)'; // Orange to Yellow
+					} else {
+					    color = 'linear-gradient(to right, #FF0000,  #FFFF00)'; // Red to Orange
+					}
+					progress.style.background = color;
+
+
                     progress.style.borderRadius = '5px';
                     progress.style.transition = 'width 0.5s ease-in-out';
 

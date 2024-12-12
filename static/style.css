@@ -1,7 +1,7 @@
 /* General Styles */
  
 .container {
-    max-width: 1500px;
+    max-width: 1800px;
     margin: 20px auto;
     padding: 20px;
     background: #fff;
@@ -105,7 +105,7 @@ table th, table td {
 .task-list th:nth-child(4) { width: 5%; }    /* Priority */
 .task-list th:nth-child(5) { width: 5%; }    /* Status */
 .task-list th:nth-child(6) { width: 5%; }    /* Monthly Action */
-.task-list th:nth-child(7) { width: 5%; }    /* Due Date */
+.task-list th:nth-child(7) { width: 10%; }    /* Due Date */
 .task-list th:nth-child(8) { width: 5%; }    /* Completion */
 .task-list th:nth-child(9) { width: 20%; }   /* Actions */
 .task-list th:nth-child(10) { width: 30%; }   /* Updates */
@@ -114,7 +114,7 @@ table th, table td {
 .action-list td:nth-child(1) { width: 5%; }    /* ID */
 .action-list td:nth-child(2) { width: 30%; }   /* Description */
 .action-list td:nth-child(3) { width: 5%; }    /* Priority */
-.action-list td:nth-child(4) { width: 5%; }    /* Due Date */
+.action-list td:nth-child(4) { width: 10%; }    /* Due Date */
 .action-list td:nth-child(5) { width: 5%; }    /* Status */
 .action-list td:nth-child(6) { width: 5%; }    /* Completion */
 .action-list td:nth-child(7) { width: 15%; }   /* Actions */
@@ -241,5 +241,17 @@ textarea {
     margin-top: 5px;
     border: 1px solid #ccc;
     border-radius: 4px;
+}
+.progress-bar {
+    width: 100%;
+    height: 20px;
+    border-radius: 5px;
+    overflow: hidden;
+    background-color: #f3f3f3; /* Light grey background for the progress container */
+}
+
+.progress-bar-inner {
+    height: 100%;
+    transition: width 0.5s ease-in-out; /* Smooth width transition */
 }
 
