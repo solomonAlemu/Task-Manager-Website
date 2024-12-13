@@ -57,7 +57,7 @@ form input[name="priority" ], form select, form textarea {
 }
 form input[name="status" ], form select, form textarea {
     display: block;
-    width: calc(100% - 20px); /* Match column widths by aligning with table cell padding */
+    width: calc(50% - 20px); /* Match column widths by aligning with table cell padding */
     padding: 10px;
 }
 form input[name="keyword" ], form select, form textarea {
