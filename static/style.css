@@ -154,6 +154,7 @@ table th, table td {
 	word-wrap: break-word; /* Break long words to wrap within the container */
 	word-break: break-word; /* Ensure words are broken to fit within the width */
 	overflow-wrap: break-word; /* Handle word wrapping for overflows */
+
 	width: 30%; }   /* Updates */
 
 

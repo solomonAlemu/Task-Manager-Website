@@ -172,6 +172,13 @@
 						<select id="emailSelect_{{ task[0] }}" class="email-recipient-list form-control" multiple>
 					        <option value="">Select Recipient</option>
 					    </select>
+						<select id="emailIntent_{{ task[0] }}" class="email-intent-list form-control">
+						    <option value="Assignment">Assignment</option>
+						    <option value="Status request">Status request</option>
+						    <option value="Reminder">Reminder</option>
+						    <option value="Notification" selected>Notification</option>
+						</select>
+
 					    <button 
 					        onclick="sendTaskEmail({{ task[0] }})" 
 					        class="btn-sendTaskEmail"
@@ -304,19 +311,22 @@
                 populateEmailList();
             }
         })
-        .catch(error => {
-            console.error('Error:', error);
-            alert('An error occurred while adding the email');
-        });
+		.catch(error => {
+		    console.error('Error sending email:', error);
+		    alert(`An error occurred while sending the email: ${error.message}`);
+		});
+
     }
 
 	function sendTaskEmail(taskId) {
 	    const emailSelect = document.getElementById(`emailSelect_${taskId}`);
+	    const intentSelect = document.getElementById(`emailIntent_${taskId}`);
 	    const selectedOptions = Array.from(emailSelect.selectedOptions);
 	    const recipients = selectedOptions.map(option => {
 	        const [name, email] = option.text.split(' (');
 	        return { name: name.trim(), email: email.replace(')', '').trim() };
 	    });
+	    const emailIntent = intentSelect.value;
 
 	    if (recipients.length === 0) {
 	        alert('Please select at least one email recipient');
@@ -328,7 +338,7 @@
 	        headers: {
 	            'Content-Type': 'application/x-www-form-urlencoded',
 	        },
-	        body: `task_id=${taskId}&recipients=${encodeURIComponent(JSON.stringify(recipients))}`
+	        body: `task_id=${taskId}&recipients=${encodeURIComponent(JSON.stringify(recipients))}&intent=${encodeURIComponent(emailIntent)}`
 	    })
 	    .then(response => response.json())
 	    .then(data => {
@@ -339,6 +349,7 @@
 	        alert('An error occurred while sending the email');
 	    });
 	}
+
 
 
 

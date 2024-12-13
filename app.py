@@ -495,7 +495,14 @@ def manage_emails():
 def send_task_email():
     """Send email notification for a specific task."""
     task_id = request.form.get('task_id')
-    recipients = json.loads(request.form.get('recipients'))  # Parse JSON array of recipients
+    recipients = json.loads(request.form.get('recipients', '[]'))  # Parse JSON array of recipients
+    intent = request.form.get('intent')  # Get the intent parameter
+
+    if not task_id or not recipients or not intent:
+        return jsonify({
+            "success": False,
+            "message": "Invalid input: task_id, recipients, and intent are required."
+        }), 400
 
     try:
         with sqlite3.connect(DATABASE) as conn:
@@ -518,17 +525,19 @@ def send_task_email():
                 "percentage_completion": task[5]
             }
 
-            result = email_notifier.send_task_notification(recipients, task_details)
+            # Pass intent to the email notifier
+            result = email_notifier.send_task_notification(recipients, task_details, intent)
             
             return jsonify({
                 "success": result, 
                 "message": "Emails sent successfully" if result else "Failed to send emails"
             })
         
-        return jsonify({"success": False, "message": "Task not found"})
+        return jsonify({"success": False, "message": "Task not found"}), 404
 
-    except sqlite3.Error as e:
-        return jsonify({"success": False, "message": str(e)})
+    except Exception as e:
+        print(f"Error in /send-task-email: {e}")
+        return jsonify({"success": False, "message": str(e)}), 500
 
 
 @app.route('/get-emails', methods=['GET'])
