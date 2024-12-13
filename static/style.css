@@ -100,25 +100,61 @@ table th, table td {
 
 /* Adjust column width ratios for the first table */
 .task-list th:nth-child(1) { width: 1%; }    /* ID */
-.task-list th:nth-child(2) { width: 5%; }   /* Assigned Person */
-.task-list th:nth-child(3) { width: 30%; }   /* Description */
+.task-list th:nth-child(2) { width: 5%; }    /* Assigned Person */
+.task-list th:nth-child(3) { 
+	white-space: pre-wrap; /* Preserve white-space and wrap text */
+	word-wrap: break-word; /* Break long words to wrap within the container */
+	word-break: break-word; /* Ensure words are broken to fit within the width */
+	overflow-wrap: break-word; /* Handle word wrapping for overflows */
+	width: 20%; 
+}   /* Description */
 .task-list th:nth-child(4) { width: 5%; }    /* Priority */
 .task-list th:nth-child(5) { width: 5%; }    /* Status */
-.task-list th:nth-child(6) { width: 5%; }    /* Monthly Action */
-.task-list th:nth-child(7) { width: 10%; }    /* Due Date */
+.task-list th:nth-child(6) {
+	white-space: pre-wrap; /* Preserve white-space and wrap text */
+	word-wrap: break-word; /* Break long words to wrap within the container */
+	word-break: break-word; /* Ensure words are broken to fit within the width */
+	overflow-wrap: break-word; /* Handle word wrapping for overflows */ 
+	width: 5%; 
+}    /* Monthly Action */
+.task-list th:nth-child(7) {
+	white-space: pre-wrap; /* Preserve white-space and wrap text */
+	word-wrap: break-word; /* Break long words to wrap within the container */
+	word-break: break-word; /* Ensure words are broken to fit within the width */
+	overflow-wrap: break-word; /* Handle word wrapping for overflows */
+	 width: 6%; 
+ }   /* Due Date */
 .task-list th:nth-child(8) { width: 5%; }    /* Completion */
-.task-list th:nth-child(9) { width: 20%; }   /* Actions */
-.task-list th:nth-child(10) { width: 30%; }   /* Updates */
+.task-list th:nth-child(9) { width: 15%; }   /* Actions */
+.task-list th:nth-child(10) { 
+	white-space: pre-wrap; /* Preserve white-space and wrap text */
+	word-wrap: break-word; /* Break long words to wrap within the container */
+	word-break: break-word; /* Ensure words are broken to fit within the width */
+	overflow-wrap: break-word; /* Handle word wrapping for overflows */
+	width: 20%; 
+}  /* Updates */
+.task-list th:nth-child(11) { width: 30%; }  /* Email Notification */
+
 
 /* Adjust column width ratios for the second table */
 .action-list td:nth-child(1) { width: 5%; }    /* ID */
-.action-list td:nth-child(2) { width: 30%; }   /* Description */
+.action-list td:nth-child(2) { 
+	white-space: pre-wrap; /* Preserve white-space and wrap text */
+	word-wrap: break-word; /* Break long words to wrap within the container */
+	word-break: break-word; /* Ensure words are broken to fit within the width */
+	overflow-wrap: break-word; /* Handle word wrapping for overflows */
+	width: 30%; }   /* Description */
 .action-list td:nth-child(3) { width: 5%; }    /* Priority */
 .action-list td:nth-child(4) { width: 10%; }    /* Due Date */
 .action-list td:nth-child(5) { width: 5%; }    /* Status */
 .action-list td:nth-child(6) { width: 5%; }    /* Completion */
 .action-list td:nth-child(7) { width: 15%; }   /* Actions */
-.action-list td:nth-child(8) { width: 30%; }   /* Updates */
+.action-list td:nth-child(8) { 
+	white-space: pre-wrap; /* Preserve white-space and wrap text */
+	word-wrap: break-word; /* Break long words to wrap within the container */
+	word-break: break-word; /* Ensure words are broken to fit within the width */
+	overflow-wrap: break-word; /* Handle word wrapping for overflows */
+	width: 30%; }   /* Updates */
 
 
 /* Adjust column width ratios for the first table */

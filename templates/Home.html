@@ -166,10 +166,10 @@
 		</form>
                 </td>
 
-		    <td><pre>{{ task[7] }}</pre></td>
+		    <td class="updates" >{{ task[7] }}</tdclass="email-recipient-list form-control">
                     <!-- Email Notification Column -->
 					<td>
-					    <select id="emailSelect_{{ task[0] }}" class="email-recipient-list form-control">
+						<select id="emailSelect_{{ task[0] }}" class="email-recipient-list form-control" multiple>
 					        <option value="">Select Recipient</option>
 					    </select>
 					    <button 
@@ -312,18 +312,23 @@
 
 	function sendTaskEmail(taskId) {
 	    const emailSelect = document.getElementById(`emailSelect_${taskId}`);
-	    const selectedEmail = emailSelect.value;
-	    const selectedName = emailSelect.options[emailSelect.selectedIndex].text.split(' (')[0]; // Extract name
-	    if (!selectedEmail) {
-	        alert('Please select an email recipient');
+	    const selectedOptions = Array.from(emailSelect.selectedOptions);
+	    const recipients = selectedOptions.map(option => {
+	        const [name, email] = option.text.split(' (');
+	        return { name: name.trim(), email: email.replace(')', '').trim() };
+	    });
+
+	    if (recipients.length === 0) {
+	        alert('Please select at least one email recipient');
 	        return;
 	    }
+
 	    fetch('/send-task-email', {
 	        method: 'POST',
 	        headers: {
 	            'Content-Type': 'application/x-www-form-urlencoded',
 	        },
-	        body: `task_id=${taskId}&email=${encodeURIComponent(selectedEmail)}&name=${encodeURIComponent(selectedName)}`
+	        body: `task_id=${taskId}&recipients=${encodeURIComponent(JSON.stringify(recipients))}`
 	    })
 	    .then(response => response.json())
 	    .then(data => {
@@ -334,6 +339,7 @@
 	        alert('An error occurred while sending the email');
 	    });
 	}
+
 
 
     // Populate Email Recipient Lists
@@ -375,8 +381,26 @@
 	        });
 	}
 
-	// Call this function for each task
+	function displayTextWithNewLines(text, elementId) {
+	    // Replace newline characters with <br> tags
+	    const formattedText = text.replace(/\n/g, '<br>');
+	    // Insert the formatted text into the specified element
+	    document.getElementById(elementId).innerHTML = formattedText;
+	}
+
+	// Example text for demonstration
+	const exampleText = "This is an example text\nthat includes new line characters\nand it should display accordingly.";
+
+	// Call this function for each task after the DOM is loaded
 	document.addEventListener('DOMContentLoaded', () => {
+	    document.querySelectorAll('.updates').forEach((cell, index) => {
+	        // Assign a unique ID to each cell if it doesn't have one
+	        if (!cell.id) {
+	            cell.id = `updateCell_${index}`;
+	        }
+	        // Display text with new lines in each cell
+	        displayTextWithNewLines(cell.textContent, cell.id);
+	    });
 	    document.querySelectorAll('.email-recipient-list').forEach(select => {
 	        const taskId = select.id.split('_')[1];
 	        populateEmailDropdown(taskId);
@@ -392,6 +416,9 @@
         alert(`Form Action URL: ${formAction}`); // Display the action URL
         this.submit(); // Submit the form
     });
+	
+
+		
     </script>
 </div>
 {% endblock %}

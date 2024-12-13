@@ -95,7 +95,7 @@
                             <button type="submit" class="delete-btn" onclick="return confirm('Are you sure you want to delete this item?')">Delete</button>
                         </form>
                     </td>
-                    <td>{{ action[6] }}</td>
+                    <td class="updates" >{{ action[6] }}</td>
                 </tr>
                  
                 {% endfor %}
@@ -166,7 +166,23 @@
 		        });
 		});
 
-   
+		function displayTextWithNewLines(text, elementId) {
+			    // Replace newline characters with <br> tags
+			    const formattedText = text.replace(/\n/g, '<br>');
+			    // Insert the formatted text into the specified element
+			    document.getElementById(elementId).innerHTML = formattedText;
+			}
+
+			document.addEventListener('DOMContentLoaded', () => {
+				    document.querySelectorAll('.updates').forEach((cell, index) => {
+				        // Assign a unique ID to each cell if it doesn't have one
+				        if (!cell.id) {
+				            cell.id = `updateCell_${index}`;
+				        }
+				        // Display text with new lines in each cell
+				        displayTextWithNewLines(cell.textContent, cell.id);
+				    });
+				});  
 
     // Show the form when the "Add Action" button is clicked
     document.getElementById("showFormButton").addEventListener("click", function () {

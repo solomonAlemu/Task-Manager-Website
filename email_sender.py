@@ -3,44 +3,46 @@ import pythoncom
 
 class EmailNotifier:
     @staticmethod
-    def send_task_notification(recipient_name, recipient_email, task_details):
+    def send_task_notification(recipient_list, task_details):
         """
-        Send an email notification about a task.
+        Send an email notification about a task to multiple recipients.
 
         Args:
-            recipient_name (str): Name of the recipient
-            recipient_email (str): Email address of the recipient
+            recipient_list (list): List of dictionaries with recipient 'name' and 'email'
             task_details (dict): Dictionary containing task information
         """
         try:
-            # Initialize COM libraries for multi-threaded application
             pythoncom.CoInitialize()
 
-            # Create Outlook application
             outlook = win32.Dispatch('outlook.application')
-            mail = outlook.CreateItem(0)  # 0 represents mail item
+            mail = outlook.CreateItem(0)
 
-            # Construct email content
+            # Generate the salutation
+            recipient_names = [recipient['name'] for recipient in recipient_list]
+            salutation = f"Dear {', '.join(recipient_names[:-1])} & {recipient_names[-1]}," if len(recipient_names) > 1 else f"Dear {recipient_names[0]},"
+
+            # Construct the email body
             mail.Subject = f"Task Update: {task_details.get('description', 'Unnamed Task')}"
-            
-            mail.Body = f"""
-Dear {recipient_name},
-
-Task Notification Details:
--------------------------
-Description: {task_details.get('description', 'N/A')}
-Priority: {task_details.get('priority', 'N/A')}
-Status: {task_details.get('status', 'N/A')}
-Assigned Person: {task_details.get('assigned_person', 'N/A')}
-Due Date: {task_details.get('due_date', 'No due date')}
-Completion: {task_details.get('percentage_completion', '0')}%
+            mail.Body = f"""{salutation}
+Greetings!
 
 Please review and take necessary actions.
 
+    Task Notification Details:
+    -------------------------
+    Description: {task_details.get('description', 'N/A')}
+    Priority: {task_details.get('priority', 'N/A')}
+    Status: {task_details.get('status', 'N/A')}
+    Assigned Person: {task_details.get('assigned_person', 'N/A')}
+    Due Date: {task_details.get('due_date', 'No due date')}
+    Completion: {task_details.get('percentage_completion', '0')}%
+
 Best regards,
+Your Team
             """
 
-            mail.To = recipient_email
+            # Add all recipient emails to the "To" field
+            mail.To = "; ".join([recipient['email'] for recipient in recipient_list])
             mail.Send()
 
             return True
@@ -48,5 +50,4 @@ Best regards,
             print(f"Email sending error: {e}")
             return False
         finally:
-            # Uninitialize COM libraries
             pythoncom.CoUninitialize()

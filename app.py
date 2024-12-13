@@ -495,11 +495,9 @@ def manage_emails():
 def send_task_email():
     """Send email notification for a specific task."""
     task_id = request.form.get('task_id')
-    recipient_email = request.form.get('email')
-    recipient_name = request.form.get('name')  # Get the recipient's name
+    recipients = json.loads(request.form.get('recipients'))  # Parse JSON array of recipients
 
     try:
-        # Fetch task details from database
         with sqlite3.connect(DATABASE) as conn:
             cursor = conn.cursor()
             cursor.execute("""
@@ -520,13 +518,11 @@ def send_task_email():
                 "percentage_completion": task[5]
             }
 
-            result = email_notifier.send_task_notification(
-                recipient_name, recipient_email, task_details
-            )
+            result = email_notifier.send_task_notification(recipients, task_details)
             
             return jsonify({
                 "success": result, 
-                "message": "Email sent successfully" if result else "Failed to send email"
+                "message": "Emails sent successfully" if result else "Failed to send emails"
             })
         
         return jsonify({"success": False, "message": "Task not found"})
