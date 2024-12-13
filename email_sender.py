@@ -29,7 +29,8 @@ class EmailNotifier:
                 body = f"""{salutation}
 Greetings!
 
-    You have been assigned a new task:
+You have been assigned a new task:
+
     Description: {task_details.get('description', 'N/A')}
     Priority: {task_details.get('priority', 'N/A')}
     Due Date: {task_details.get('due_date', 'No due date')}
@@ -43,7 +44,8 @@ Your Team
                 body = f"""{salutation}
 Greetings!
 
-    I kindly request a status update for the following task:
+I kindly request a status update for the following task:
+
     Description: {task_details.get('description', 'N/A')}
     Priority: {task_details.get('priority', 'N/A')}
     Assigned Person: {task_details.get('assigned_person', 'N/A')}
@@ -58,7 +60,8 @@ Your Team
                 body = f"""{salutation}
 Greetings!
 
-    This is a reminder for the following task:
+This is a reminder for the following task:
+
     Description: {task_details.get('description', 'N/A')}
     Priority: {task_details.get('priority', 'N/A')}
     Due Date: {task_details.get('due_date', 'No due date')}
@@ -72,7 +75,8 @@ Your Team
                 body = f"""{salutation}
 Greetings!
 
-    Here is an update regarding the following task:
+Here is an update regarding the following task:
+
     Description: {task_details.get('description', 'N/A')}
     Priority: {task_details.get('priority', 'N/A')}
     Status: {task_details.get('status', 'N/A')}

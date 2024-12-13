@@ -549,6 +549,12 @@ def get_emails():
     except Exception as e:
         return jsonify({"error": "Failed to load email data", "details": str(e)})
 
+@app.route('/email-management')
+def email_management():
+    """Render the email management page."""
+    return render_template('email_management.html')
+
+
 if __name__ == '__main__':
     init_db()
     app.run(host="0.0.0.0", port=8181, threaded=True, use_reloader=False)

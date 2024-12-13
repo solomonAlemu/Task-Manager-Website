@@ -1,0 +1,77 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="container">
+    <!-- Email Management Section -->
+    <section class="email-management">
+        <h2>Email Recipient Management</h2>
+        <div class="email-form">
+            <div class="form-group">
+                <label for="emailName">Name:</label>
+                <input type="text" id="emailName" placeholder="Enter recipient name" required>
+            </div>
+            <div class="form-group">
+                <label for="emailAddress">Email Address:</label>
+                <input type="email" id="emailAddress" placeholder="Enter email address" required>
+            </div>
+            <button onclick="manageEmails()" class="btn-primary">Add Email Recipient</button>
+        </div>
+    </section>
+</div>
+<script>
+
+// Email Management Functions
+  function manageEmails() {
+      const name = document.getElementById('emailName').value;
+      const email = document.getElementById('emailAddress').value;
+
+      if (!name || !email) {
+          alert('Please enter both name and email');
+          return;
+      }
+
+      fetch('/manage-emails', {
+          method: 'POST',
+          headers: {
+              'Content-Type': 'application/x-www-form-urlencoded',
+          },
+          body: `name=${encodeURIComponent(name)}&email=${encodeURIComponent(email)}`
+      })
+      .then(response => response.json())
+      .then(data => {
+          alert(data.message);
+          if (data.success) {
+              document.getElementById('emailName').value = '';
+              document.getElementById('emailAddress').value = '';
+              populateEmailList();
+          }
+      })
+	.catch(error => {
+	    console.error('Error sending email:', error);
+	    alert(`An error occurred while creating the email: ${error.message}`);
+	});
+
+  }
+  // Populate Email Recipient Lists
+  function populateEmailList() {
+      fetch('/manage-emails')
+      .then(response => response.json())
+      .then(data => {
+          const emailLists = document.querySelectorAll('.email-recipient-list');
+          emailLists.forEach(list => {
+              list.innerHTML = '<option value="">Select Recipient</option>';
+              data.users.forEach(user => {
+                  const option = document.createElement('option');
+                  option.value = user.email;
+                  option.textContent = `${user.name} (${user.email})`;
+                  list.appendChild(option);
+              });
+          });
+      })
+      .catch(error => {
+          console.error('Error fetching emails:', error);
+      });
+  }
+  
+  </script>
+{% endblock %}
