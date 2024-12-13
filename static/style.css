@@ -180,6 +180,49 @@ form button.delete-btn {
     transform: scale(1); /* Reset size on click */
 }
 
+.btn-primary {
+    background-color: rgb(213, 213, 0); /* Blue background */
+    color: white; /* White text */
+    font-size: 16px; /* Medium font size */
+    padding: 10px 20px; /* Padding around the button */
+    border: none; /* No border */
+    border-radius: 5px; /* Rounded corners */
+    cursor: pointer; /* Pointer cursor on hover */
+    transition: background-color 0.3s ease, transform 0.2s ease; /* Smooth transitions */
+    box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1); /* Subtle shadow */
+}
+
+.btn-primary:hover {
+    background-color: #0056b3; /* Darker blue on hover */
+    transform: scale(1.05); /* Slightly larger on hover */
+}
+
+.btn-primary:active {
+    background-color: #003f7f; /* Even darker blue when clicked */
+    transform: scale(1); /* Reset size on click */
+}
+
+.btn-sendTaskEmail {
+    background-color: rgb(0, 128, 255); /* Blue background */
+    color: white; /* White text */
+    font-size: 16px; /* Medium font size */
+    padding: 10px 20px; /* Padding around the button */
+    border: none; /* No border */
+    border-radius: 5px; /* Rounded corners */
+    cursor: pointer; /* Pointer cursor on hover */
+    transition: background-color 0.3s ease, transform 0.2s ease; /* Smooth transitions */
+    box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1); /* Subtle shadow */
+}
+
+.btn-sendTaskEmail:hover {
+    background-color: #0056b3; /* Darker blue on hover */
+    transform: scale(1.05); /* Slightly larger on hover */
+}
+
+.btn-sendTaskEmail:active {
+    background-color: #003f7f; /* Even darker blue when clicked */
+    transform: scale(1); /* Reset size on click */
+}
 
 form button.delete-btn:hover {
     background: #e53935;

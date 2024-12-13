@@ -1,10 +1,18 @@
 from flask import Flask, render_template, request, redirect, url_for, jsonify
 import sqlite3
 import os
-from datetime import datetime
+from datetime import datetime 
+import json
+
+from email_config import EmailManager
+from email_sender import EmailNotifier
 
 app = Flask(__name__)
 DATABASE = 'tasks.db'
+
+# Initialize email manager
+email_manager = EmailManager()
+email_notifier = EmailNotifier()
 
 def get_db_connection():
     """Establish a connection to the database."""
@@ -462,6 +470,79 @@ def task_data():
         print(f"Database error: {e}")
         return jsonify({"error": "Failed to fetch task data."}), 500
 
+
+# Add new routes for email management
+@app.route('/manage-emails', methods=['GET', 'POST'])
+def manage_emails():
+    """Manage email configurations."""
+    if request.method == 'POST':
+        name = request.form.get('name')
+        email = request.form.get('email')
+        
+        if name and email:
+            result = email_manager.add_user(name, email)
+            return jsonify({
+                "success": result, 
+                "message": "User added successfully" if result else "User already exists"
+            })
+        
+        return jsonify({"success": False, "message": "Invalid input"})
+    
+    # GET method to fetch users
+    return jsonify({"users": email_manager.get_users()})
+
+@app.route('/send-task-email', methods=['POST'])
+def send_task_email():
+    """Send email notification for a specific task."""
+    task_id = request.form.get('task_id')
+    recipient_email = request.form.get('email')
+    recipient_name = request.form.get('name')  # Get the recipient's name
+
+    try:
+        # Fetch task details from database
+        with sqlite3.connect(DATABASE) as conn:
+            cursor = conn.cursor()
+            cursor.execute("""
+                SELECT description, priority, status, assigned_person, 
+                       due_date, percentage_completion 
+                FROM tasks 
+                WHERE id = ?
+            """, (task_id,))
+            task = cursor.fetchone()
+
+        if task:
+            task_details = {
+                "description": task[0],
+                "priority": task[1],
+                "status": task[2],
+                "assigned_person": task[3],
+                "due_date": task[4],
+                "percentage_completion": task[5]
+            }
+
+            result = email_notifier.send_task_notification(
+                recipient_name, recipient_email, task_details
+            )
+            
+            return jsonify({
+                "success": result, 
+                "message": "Email sent successfully" if result else "Failed to send email"
+            })
+        
+        return jsonify({"success": False, "message": "Task not found"})
+
+    except sqlite3.Error as e:
+        return jsonify({"success": False, "message": str(e)})
+
+
+@app.route('/get-emails', methods=['GET'])
+def get_emails():
+    try:
+        with open('email_config.json', 'r') as f:
+            data = json.load(f)
+        return jsonify(data.get('users', []))
+    except Exception as e:
+        return jsonify({"error": "Failed to load email data", "details": str(e)})
 
 if __name__ == '__main__':
     init_db()

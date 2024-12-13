@@ -2,11 +2,27 @@
 
 {% block content %}
 <div class="container">
+    <!-- Email Management Section -->
+    <section class="email-management">
+        <h2>Email Recipient Management</h2>
+        <div class="email-form">
+            <div class="form-group">
+                <label for="emailName">Name:</label>
+                <input type="text" id="emailName" placeholder="Enter recipient name" required>
+            </div>
+            <div class="form-group">
+                <label for="emailAddress">Email Address:</label>
+                <input type="email" id="emailAddress" placeholder="Enter email address" required>
+            </div>
+            <button onclick="manageEmails()" class="btn-primary">Add Email Recipient</button>
+        </div>
+    </section>
+
     <!-- Add Action Button -->
-    <section>
-		<h2>Manage Daily Actions</h2>
+    <section class="task-actions">
+        <h2>Manage Daily Actions</h2>
         <h3>Add New Tasks</h3>
-		<button id="showFormButton" type="button" class="show-btn">Add Task</button>
+	<button id="showFormButton" type="button" class="show-btn">Add Task</button>
 
     </section>
 
@@ -26,59 +42,62 @@
                     <option value="Low">Low Priority</option>
                 </select>
             </div>
-			<div class="form-group">
-			    <label for="monthly_action_id">Monthly Action Item (Optional)</label>
-			    <select name="monthly_action_id">
-			        <option value="">Select Monthly Action Item</option>
-			        {% for action in monthly_actions %}
-			        <option value="{{ action[0] }}">{{ action[1] }} ({{ action[2] }} Priority)</option>
-			        {% endfor %}
-			    </select>
-			</div>
-			<div class="form-group">
-			    <label for="assigned_person">Assigned Person</label>
-			    <input type="text" name="assigned_person">
-			</div>
+            <div class="form-group">
+                <label for="monthly_action_id">Monthly Action Item (Optional)</label>
+                <select name="monthly_action_id">
+                    <option value="">Select Monthly Action Item</option>
+                    {% for action in monthly_actions %}
+                    <option value="{{ action[0] }}">{{ action[1] }} ({{ action[2] }} Priority)</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="form-group">
+                <label for="assigned_person">Assigned Person</label>
+                <input type="text" name="assigned_person">
+            </div>
             <div class="form-group">
                 <label for="due_date">Due Date</label>
                 <input type="date" name="due_date">
             </div>
-            <button type="submit" id="addTaskButton">Add Task</button>
+            <button type="submit" id="addTaskButton" class="btn-addTask">Add Task</button>
         </form>
- 
-	</section>
+    </section>
+
     <!-- Search Form for Fetching Tasks -->
-    <section>
+    <section class="task-search">
         <h3>Fetch Historical Tasks</h3>
         <form id="fetchForm" class="add-task-form">
-			<select name="status" id="status">
-			    <option value="">All</option>
-			    <option value="Open">Open</option>
-			    <option value="In Progress">In Progress</option>
-			    <option value="Completed">Completed</option>
-			    <option value="Cancelled">Cancelled</option>
-			</select>
+            <select name="status" id="status">
+                <option value="">All</option>
+                <option value="Open">Open</option>
+                <option value="In Progress">In Progress</option>
+                <option value="Completed">Completed</option>
+                <option value="Cancelled">Cancelled</option>
+            </select>
             <input type="text" id="keyword" name="keyword" placeholder="Search keyword">
-            <button type="button" id="fetchButton">Fetch Tasks</button>
+            <button type="button" id="fetchButton" class="btn btn-fetch">Fetch Tasks</button>
         </form>
-        <div id="taskResults"></div> <!-- Container to display fetched task results -->
+        <div id="taskResults"></div>
     </section>
-    <section>
+
+    <!-- Daily Task List -->
+    <section class="task-list">
         <h2>Daily Task List</h2>
         {% if tasks %}
-        <table class="task-list">
+        <table class="table table-striped">
             <thead>
                 <tr>
                     <th>ID</th>
-					<th>Assigned Person</th>
+                    <th>Assigned Person</th>
                     <th>Description</th>
                     <th>Priority</th>
                     <th>Status</th>
-					<th>Monthly Action</th>
+                    <th>Monthly Action</th>
                     <th>Due Date</th>
-                    <th>Status (%)</th>
+                    <th>Status (%)</th>   
                     <th>Actions</th>
-					<th>Updates </th>
+                    <th>Updates</th>
+                    <th>Email Notification</th>
                 </tr>
             </thead>
             <tbody>
@@ -88,67 +107,78 @@
                     <td>{{ task[1] or "Not Assigned" }}</td>
                     <td>{{ task[2] }}</td>
                     <td>{{ task[3] }}</td>
-					<td>{{ task[4] }}</td>
-					<td>{{ task[9] if task[9] else 'No linked action' }}</td>
+                    <td>{{ task[4] }}</td>
+                    <td>{{ task[9] if task[9] else 'No linked action' }}</td>
                     <td>{{ task[8] }}</td>
                     <td>{{ task[5] }} %</td>
+		<td>
+		<!-- Update Task Progress -->
+		<form action="{{ url_for('update_task', task_id=task[0]) }}" method="POST" class="form-container">
+		<div class="grid-container">
+		    <div class="grid-item">
+			<label for="progress">Progress (%)</label>
+			<input
+			    type="number"
+			    id="progress"
+			    name="percentage_completion"
+			    min="0"
+			    max="100"
+			    value="{{ task[5] }}"
+			    required
+			/>
+		    </div>
+		    <div class="grid-item">
+			<label for="status">Task Status</label>
+			<select name="status" id="status">
+			    <option value="Open" {% if task[2] == 'Open' %}selected{% endif %}>Open</option>
+			    <option value="In Progress" {% if task[2] == 'In Progress' %}selected{% endif %}>In Progress</option>
+			    <option value="Completed" {% if task[2] == 'Completed' %}selected{% endif %}>Completed</option>
+			    <option value="Cancelled" {% if task[2] == 'Cancelled' %}selected{% endif %}>Cancelled</option>
+			</select>
+		    </div>
+		    <div class="grid-item">
+			<label for="notes">Notes</label>
+			<textarea
+			    name="notes"
+			    class="notes-text"
+			    placeholder="Add notes..."
+			></textarea>
+		    </div>
+		<div class="form-group">
+		    <label for="assigned_person">Assigned Person</label>
+		    <input type="text" name="assigned_person" value="{{ task[1] }}">
+		</div>
+		    <div class="grid-item">
+			<button type="submit" class="status-btn"onclick="return confirm('Are you sure you want to update this item?')">Update</button>
+		    </div>
+		</div>
+		</form>
+
+		<!-- Delete Task -->
+		<form action="/delete/{{ task[0] }}" method="POST" class="delete-form">
+		<button
+		    type="submit"
+		    class="delete-btn"
+		    onclick="return confirm('Are you sure you want to delete this item?')"
+		>
+		    Delete
+		</button>
+		</form>
+                </td>
+
+		    <td><pre>{{ task[7] }}</pre></td>
+                    <!-- Email Notification Column -->
 					<td>
-					    <!-- Update Task Progress -->
-					    <form action="{{ url_for('update_task', task_id=task[0]) }}" method="POST" class="form-container">
-					        <div class="grid-container">
-					            <div class="grid-item">
-					                <label for="progress">Progress (%)</label>
-					                <input
-					                    type="number"
-					                    id="progress"
-					                    name="percentage_completion"
-					                    min="0"
-					                    max="100"
-					                    value="{{ task[5] }}"
-					                    required
-					                />
-					            </div>
-					            <div class="grid-item">
-					                <label for="status">Task Status</label>
-					                <select name="status" id="status">
-					                    <option value="Open" {% if task[2] == 'Open' %}selected{% endif %}>Open</option>
-					                    <option value="In Progress" {% if task[2] == 'In Progress' %}selected{% endif %}>In Progress</option>
-					                    <option value="Completed" {% if task[2] == 'Completed' %}selected{% endif %}>Completed</option>
-					                    <option value="Cancelled" {% if task[2] == 'Cancelled' %}selected{% endif %}>Cancelled</option>
-					                </select>
-					            </div>
-					            <div class="grid-item">
-					                <label for="notes">Notes</label>
-					                <textarea
-					                    name="notes"
-					                    class="notes-text"
-					                    placeholder="Add notes..."
-					                ></textarea>
-					            </div>
-								<div class="form-group">
-								    <label for="assigned_person">Assigned Person</label>
-								    <input type="text" name="assigned_person" value="{{ task[1] }}">
-								</div>
-					            <div class="grid-item">
-					                <button type="submit" class="status-btn"onclick="return confirm('Are you sure you want to update this item?')">Update</button>
-					            </div>
-					        </div>
-					    </form>
-
-					    <!-- Delete Task -->
-					    <form action="/delete/{{ task[0] }}" method="POST" class="delete-form">
-					        <button
-					            type="submit"
-					            class="delete-btn"
-					            onclick="return confirm('Are you sure you want to delete this item?')"
-					        >
-					            Delete
-					        </button>
-					    </form>
-						
+					    <select id="emailSelect_{{ task[0] }}" class="email-recipient-list form-control">
+					        <option value="">Select Recipient</option>
+					    </select>
+					    <button 
+					        onclick="sendTaskEmail({{ task[0] }})" 
+					        class="btn-sendTaskEmail"
+					    >
+					        Send
+					    </button>
 					</td>
-
-				    <td><pre>{{ task[7] }}</pre></td>
                 </tr>
                 {% endfor %}
             </tbody>
@@ -247,6 +277,113 @@
         formSection.style.display = "block"; // Show the form section
         this.style.display = "none"; // Hide the "Add Action" button
     });
+
+    // Email Management Functions
+    function manageEmails() {
+        const name = document.getElementById('emailName').value;
+        const email = document.getElementById('emailAddress').value;
+
+        if (!name || !email) {
+            alert('Please enter both name and email');
+            return;
+        }
+
+        fetch('/manage-emails', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/x-www-form-urlencoded',
+            },
+            body: `name=${encodeURIComponent(name)}&email=${encodeURIComponent(email)}`
+        })
+        .then(response => response.json())
+        .then(data => {
+            alert(data.message);
+            if (data.success) {
+                document.getElementById('emailName').value = '';
+                document.getElementById('emailAddress').value = '';
+                populateEmailList();
+            }
+        })
+        .catch(error => {
+            console.error('Error:', error);
+            alert('An error occurred while adding the email');
+        });
+    }
+
+	function sendTaskEmail(taskId) {
+	    const emailSelect = document.getElementById(`emailSelect_${taskId}`);
+	    const selectedEmail = emailSelect.value;
+	    const selectedName = emailSelect.options[emailSelect.selectedIndex].text.split(' (')[0]; // Extract name
+	    if (!selectedEmail) {
+	        alert('Please select an email recipient');
+	        return;
+	    }
+	    fetch('/send-task-email', {
+	        method: 'POST',
+	        headers: {
+	            'Content-Type': 'application/x-www-form-urlencoded',
+	        },
+	        body: `task_id=${taskId}&email=${encodeURIComponent(selectedEmail)}&name=${encodeURIComponent(selectedName)}`
+	    })
+	    .then(response => response.json())
+	    .then(data => {
+	        alert(data.message);
+	    })
+	    .catch(error => {
+	        console.error('Error sending email:', error);
+	        alert('An error occurred while sending the email');
+	    });
+	}
+
+
+    // Populate Email Recipient Lists
+    function populateEmailList() {
+        fetch('/manage-emails')
+        .then(response => response.json())
+        .then(data => {
+            const emailLists = document.querySelectorAll('.email-recipient-list');
+            emailLists.forEach(list => {
+                list.innerHTML = '<option value="">Select Recipient</option>';
+                data.users.forEach(user => {
+                    const option = document.createElement('option');
+                    option.value = user.email;
+                    option.textContent = `${user.name} (${user.email})`;
+                    list.appendChild(option);
+                });
+            });
+        })
+        .catch(error => {
+            console.error('Error fetching emails:', error);
+        });
+    }
+
+	function populateEmailDropdown(taskId) {
+	    fetch('/get-emails')
+	        .then(response => response.json())
+	        .then(data => {
+	            const emailSelect = document.getElementById(`emailSelect_${taskId}`);
+	            emailSelect.innerHTML = '<option value="">Select Recipient</option>'; // Clear existing options
+	            data.forEach(user => {
+	                const option = document.createElement('option');
+	                option.value = user.email;
+	                option.textContent = `${user.name} (${user.email})`;
+	                emailSelect.appendChild(option);
+	            });
+	        })
+	        .catch(error => {
+	            console.error('Error fetching emails:', error);
+	        });
+	}
+
+	// Call this function for each task
+	document.addEventListener('DOMContentLoaded', () => {
+	    document.querySelectorAll('.email-recipient-list').forEach(select => {
+	        const taskId = select.id.split('_')[1];
+	        populateEmailDropdown(taskId);
+	    });
+	});
+
+
 
     // Optional: Alert the form action on form submission
     document.getElementById("addTaskForm").addEventListener("submit", function (event) {
