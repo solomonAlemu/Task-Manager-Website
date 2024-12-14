@@ -360,50 +360,83 @@ def monthly_progress():
 
 @app.route('/monthly-progress-data')
 def monthly_progress_data():
-    """Provide data for the monthly progress chart."""
+    """Provide data for the monthly progress chart with optional date range."""
+    # Get date range from query parameters
+    start_date = request.args.get('start_date')
+    end_date = request.args.get('end_date')
+
     try:
         with sqlite3.connect(DATABASE) as conn:
             cursor = conn.cursor()
             
+            # Base query conditions
+            task_base_query = "FROM tasks WHERE 1=1"
+            action_base_query = "FROM monthly_action_items WHERE 1=1"
+            
+            # Date range filtering
+            if start_date and end_date:
+                task_base_query += f" AND (due_date BETWEEN '{start_date}' AND '{end_date}')"
+                action_base_query += f" AND (due_date BETWEEN '{start_date}' AND '{end_date}')"
+            
             # 1. Priority vs Completion Percentage
-            cursor.execute('''
+            cursor.execute(f"""
                 SELECT priority, 
                        AVG(percentage_completion) AS avg_completion 
-                FROM tasks 
+                {task_base_query}
                 GROUP BY priority
-            ''')
+            """)
             priority_completion_data = cursor.fetchall()
 
             # 2. Monthly Progress for Tasks
-            cursor.execute('''
+            cursor.execute(f"""
                 SELECT strftime('%Y-%m', due_date) AS month,
                        SUM(CASE WHEN status = 'Completed' THEN 1 ELSE 0 END) AS completed,
                        SUM(CASE WHEN status = 'In Progress' THEN 1 ELSE 0 END) AS in_progress,
                        SUM(CASE WHEN status = 'Open' THEN 1 ELSE 0 END) AS open
-                FROM tasks 
+                {task_base_query}
                 GROUP BY month
-            ''')
+                ORDER BY month
+            """)
             monthly_task_progress = cursor.fetchall()
             
             # 3. Monthly Progress for Action Items
-            cursor.execute('''
+            cursor.execute(f"""
                 SELECT strftime('%Y-%m', due_date) AS month,
                        SUM(CASE WHEN status = 'Completed' THEN 1 ELSE 0 END) AS completed,
                        SUM(CASE WHEN status = 'In Progress' THEN 1 ELSE 0 END) AS in_progress,
                        SUM(CASE WHEN status = 'Open' THEN 1 ELSE 0 END) AS open
-                FROM monthly_action_items 
+                {action_base_query}
                 GROUP BY month
-            ''')
+                ORDER BY month
+            """)
             monthly_action_progress = cursor.fetchall()
             
             # 4. Action Item Status Breakdown
-            cursor.execute('''
+            cursor.execute(f"""
                 SELECT status, COUNT(*) AS count
-                FROM monthly_action_items
+                {action_base_query}
                 GROUP BY status
-            ''')
+            """)
             action_status_data = cursor.fetchall()
             status_breakdown = {row[0]: row[1] for row in action_status_data}
+
+            # 5. Total Tasks by Priority (optional new chart)
+            cursor.execute(f"""
+                SELECT priority, COUNT(*) AS total_tasks
+                {task_base_query}
+                GROUP BY priority
+            """)
+            total_tasks_by_priority = dict(cursor.fetchall())
+
+            # 6. Task Completion Timeline (optional new chart)
+            cursor.execute(f"""
+                SELECT strftime('%Y-%m-%d', due_date) AS date,
+                       COUNT(CASE WHEN status = 'Completed' THEN 1 END) AS completed_tasks
+                {task_base_query}
+                GROUP BY date
+                ORDER BY date
+            """)
+            task_completion_timeline = cursor.fetchall()
 
             return jsonify({
                 "priority_completion": {row[0]: row[1] for row in priority_completion_data},
@@ -419,7 +452,12 @@ def monthly_progress_data():
                     "in_progress": [row[2] for row in monthly_action_progress],
                     "open": [row[3] for row in monthly_action_progress],
                 },
-                "status_breakdown": status_breakdown
+                "status_breakdown": status_breakdown,
+                "total_tasks_by_priority": total_tasks_by_priority,
+                "task_completion_timeline": {
+                    "dates": [row[0] for row in task_completion_timeline],
+                    "completed_tasks": [row[1] for row in task_completion_timeline]
+                }
             })
     except sqlite3.Error as e:
         print(f"Database error: {e}")
@@ -434,12 +472,15 @@ def task_charts():
 @app.route('/task-data', methods=['GET'])
 def task_data():
     """Provide task data for charts and progress bars."""
+    start_date = request.args.get('start_date')
+    end_date = request.args.get('end_date')
+
     try:
         with sqlite3.connect(DATABASE) as conn:
             cursor = conn.cursor()
 
-            # Fetch tasks with name, priority, progress, and due date
-            cursor.execute('''
+            # Base query
+            query = '''
                 SELECT 
                     description AS name, 
                     priority, 
@@ -447,7 +488,15 @@ def task_data():
                     due_date 
                 FROM tasks
                 WHERE status IN ('Open', 'In Progress', 'Completed')
-            ''')
+            '''
+
+            # Add date filter if provided
+            params = []
+            if start_date and end_date:
+                query += ' AND due_date BETWEEN ? AND ?'
+                params.extend([start_date, end_date])
+
+            cursor.execute(query, params)
             tasks = cursor.fetchall()
 
         # Structure the data as JSON
@@ -461,8 +510,6 @@ def task_data():
                 }
                 for task in tasks
             ],
-            "priorities": [task[1] for task in tasks],
-            "progress": [task[2] for task in tasks],
         }
 
         return jsonify(task_data)
@@ -557,4 +604,4 @@ def email_management():
 
 if __name__ == '__main__':
     init_db()
-    app.run(host="0.0.0.0", port=8181, threaded=True, use_reloader=False)
+    app.run(host="0.0.0.0", port=8080, threaded=True, use_reloader=False)

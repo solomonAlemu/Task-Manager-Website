@@ -3,176 +3,259 @@
 {% block content %}
 <div class="container">
     <h2>Task Charts</h2>
-    <div>
-        <h3>Priority vs. Progress</h3>
-        <canvas id="priorityChart" width="75" height="25"></canvas>
+
+    <!-- Date Range Selection -->
+    <div class="date-range-selector mb-4">
+        <form id="dateRangeForm" class="row g-3 align-items-center">
+            <div class="col-auto">
+                <label for="startDate" class="form-label">Start Date:</label>
+                <input type="date" class="form-control" id="startDate" name="startDate">
+            </div>
+            <div class="col-auto">
+                <label for="endDate" class="form-label">End Date:</label>
+                <input type="date" class="form-control" id="endDate" name="endDate">
+            </div>
+            <div class="col-auto">
+                <button type="submit" class="btn btn-primary">Apply</button>
+                <button type="button" id="resetDateRange" class="btn btn-secondary">Reset</button>
+            </div>
+        </form>
     </div>
-    <div>
-        <h3>Due Date Progress</h3>
-        <div id="progressBars"></div>
+
+    <div class="chart-grid">
+        <!-- Priority vs Progress Chart -->
+        <div class="chart-item">
+            <h3 class="chart-title">Priority vs Progress</h3>
+            <canvas id="priorityChart" class="chart-canvas"></canvas>
+        </div>
+
+        <!-- Due Date Progress Bars -->
+        <div class="chart-item">
+            <h3 class="chart-title">Due Date Progress</h3>
+            <div id="progressBars"></div>
+        </div>
     </div>
 </div>
 
+<style>
+/* Grid layout for charts */
+ 
+.chart-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); /* Auto-adjust columns */
+    gap: 20px; /* Space between charts */
+}
+
+.chart-item {
+    background-color: #fff;
+    border-radius: 10px;
+    padding: 20px;
+    box-shadow: 0 5px 15px rgba(0, 0, 0, 0.1);
+    text-align: center;
+}
+
+.chart-canvas {
+    max-width: 100%;
+    max-height: 350px; /* Chart height */
+}
+
+.date-range-selector {
+    background-color: #f8f9fa;
+    padding: 15px;
+    border-radius: 10px;
+    margin-bottom: 20px;
+}
+
+.chart-title {
+    word-wrap: break-word; /* Wrap chart title text */
+    white-space: normal; /* Ensure normal wrapping */
+    overflow-wrap: break-word; /* Compatibility for older browsers */
+}
+</style>
+
 <script>
-    // Fetch task data
-    fetch('/task-data')
-        .then(response => response.json())
-        .then(data => {
-            // Priority vs. Progress Chart
-            const ctxPriority = document.getElementById('priorityChart').getContext('2d');
-            new Chart(ctxPriority, {
-                type: 'bar',
-                data: {
-                    labels: data.tasks.map(task => task.name),
-                    datasets: [{
-                        label: 'Task Progress (%)',
-                        data: data.tasks.map(task => task.progress),
-                        backgroundColor: data.tasks.map(task => {
-                            if (task.priority === 'High') return 'rgba(255, 99, 132, 0.8)'; // Red
-                            if (task.priority === 'Medium') return 'rgba(255, 205, 86, 0.8)'; // Yellow
-                            return 'rgba(75, 192, 192, 0.8)'; // Green
-                        }),
-                        borderColor: data.tasks.map(task => {
-                            if (task.priority === 'High') return 'rgba(255, 99, 132, 1)';
-                            if (task.priority === 'Medium') return 'rgba(255, 205, 86, 1)';
-                            return 'rgba(75, 192, 192, 1)';
-                        }),
-                        borderWidth: 1,
-                        hoverBackgroundColor: data.tasks.map(task => {
-                            if (task.priority === 'High') return 'rgba(255, 99, 132, 0.9)';
-                            if (task.priority === 'Medium') return 'rgba(255, 205, 86, 0.9)';
-                            return 'rgba(75, 192, 192, 0.9)';
-                        })
-                    }]
-                },
-                options: {
-                    responsive: true,
-                    plugins: {
-                        title: {
-                            display: true,
-                            text: 'Task Priority and Progress Overview',
-                            font: {
-                                size: 22, // Increased title font size
-                                weight: 'bold'
-                            }
-                        },
-                        tooltip: {
-                            bodyFont: {
-                                size: 16 // Increased tooltip font size
-                            },
-                            callbacks: {
-                                label: function(context) {
-                                    const taskIndex = context.dataIndex;
-                                    const task = data.tasks[taskIndex];
-                                    return `${task.name}: ${task.progress}% (Priority: ${task.priority})`;
-                                }
-                            }
-                        }
+    document.addEventListener("DOMContentLoaded", () => {
+        const dateRangeForm = document.getElementById('dateRangeForm');
+        const resetButton = document.getElementById('resetDateRange');
+        const startDateInput = document.getElementById('startDate');
+        const endDateInput = document.getElementById('endDate');
+
+        // Set max date to today
+        const today = new Date().toISOString().split('T')[0];
+        startDateInput.max = today;
+        endDateInput.max = today;
+
+        // Fetch and render charts
+        async function fetchChartData(startDate = null, endDate = null) {
+            try {
+                const url = new URL("/task-data", window.location.origin);
+                if (startDate) url.searchParams.append('start_date', startDate);
+                if (endDate) url.searchParams.append('end_date', endDate);
+
+                const response = await fetch(url);
+                const data = await response.json();
+
+                // Destroy existing chart instance before re-rendering
+                const existingChart = Chart.getChart('priorityChart');
+                if (existingChart) existingChart.destroy();
+
+                // Enhance Priority vs Progress Chart
+                const ctxPriority = document.getElementById('priorityChart').getContext('2d');
+                new Chart(ctxPriority, {
+                    type: 'bar',
+                    data: {
+                        labels: data.tasks.map((_, index) => `Task ${index + 1}`), // Use task indices instead of descriptions
+                        datasets: [{
+                            label: 'Task Progress (%)',
+                            data: data.tasks.map(task => task.progress),
+                            backgroundColor: data.tasks.map(task => {
+                                if (task.priority === 'High') return 'rgba(255, 99, 132, 0.8)'; // Red
+                                if (task.priority === 'Medium') return 'rgba(255, 205, 86, 0.8)'; // Yellow
+                                return 'rgba(75, 192, 192, 0.8)'; // Green
+                            }),
+                            borderColor: data.tasks.map(task => {
+                                if (task.priority === 'High') return 'rgba(255, 99, 132, 1)';
+                                if (task.priority === 'Medium') return 'rgba(255, 205, 86, 1)';
+                                return 'rgba(75, 192, 192, 1)';
+                            }),
+                            borderWidth: 1
+                        }]
                     },
-                    scales: {
-                        x: {
-                            ticks: {
-                                font: {
-                                    size: 16 // Increased font size for x-axis labels
-                                }
-                            },
+                    options: {
+                        responsive: true,
+                        plugins: {
                             title: {
                                 display: true,
-                                text: 'Tasks',
+                                text: 'Task Priority and Progress Overview',
                                 font: {
-                                    size: 16 // Increased font size for x-axis title
+                                    size: 18
+                                }
+                            },
+                            tooltip: {
+                                callbacks: {
+                                    label: function (context) {
+                                        const task = data.tasks[context.dataIndex];
+                                        return `${task.name}: Priority - ${task.priority}, Progress - ${task.progress}%`;
+                                    }
                                 }
                             }
                         },
-                        y: {
-                            ticks: {
-                                font: {
-                                    size: 16 // Increased font size for y-axis labels
+                        scales: {
+                            x: {
+                                ticks: {
+                                    font: {
+                                        size: 12
+                                    }
                                 }
                             },
-                            beginAtZero: true,
-                            max: 100,
-                            title: {
-                                display: true,
-                                text: 'Progress (%)',
-                                font: {
-                                    size: 16 // Increased font size for y-axis title
+                            y: {
+                                beginAtZero: true,
+                                max: 100,
+                                ticks: {
+                                    font: {
+                                        size: 12
+                                    }
                                 }
                             }
                         }
                     }
-                }
-            });
-
-            // Enhanced Due Date Progress Bars
-            const progressBars = document.getElementById('progressBars');
-            data.tasks
-                .sort((a, b) => new Date(a.due_date) - new Date(b.due_date)) // Sort by due date
-                .forEach(task => {
-                    const barContainer = document.createElement('div');
-                    barContainer.style.margin = '15px 0';
-                    barContainer.style.display = 'flex';
-                    barContainer.style.alignItems = 'center';
-
-                    const label = document.createElement('div');
-                    label.style.width = '30%';
-                    label.style.fontWeight = 'bold';
-                    label.innerHTML = `
-                        <span>${task.name}</span><br>
-                        <small style="color: #666;">${task.due_date || 'No Due Date'}</small>
-                    `;
-                    barContainer.appendChild(label);
-
-                    const progressBar = document.createElement('div');
-                    progressBar.style.width = '70%';
-                    progressBar.style.backgroundColor = '#eee';
-                    progressBar.style.borderRadius = '5px';
-                    progressBar.style.position = 'relative';
-                    progressBar.style.height = '20px'; /* Reduced height for a slimmer look */
-
-                    const progress = document.createElement('div');
-                    progress.style.width = `${task.progress}%`;
-                    progress.style.height = '100%';
-					let color;
-					if (task.progress > 90) {
-					    color = 'linear-gradient(to right, #228B22, #006400)'; // Dark Green to Green
-					} else if (task.progress > 75) {
-					    color = 'linear-gradient(to right, #228B22, #32CD32)'; // Light Green to Green
-					} else if (task.progress > 60) {
-					    color = 'linear-gradient(to right, #ADFF2F, #32CD32)'; // Yellow Green to Light Green
-					} else if (task.progress > 45) {
-					    color = 'linear-gradient(to right, #FFFF00, #ADFF2F)'; // Yellow to Yellow Green
-					} else if (task.progress > 30) {
-					    color = 'linear-gradient(to right, #FFA500, #FFFF00)'; // Orange to Yellow
-					} else {
-					    color = 'linear-gradient(to right, #FF0000,  #FFFF00)'; // Red to Orange
-					}
-					progress.style.background = color;
-
-
-                    progress.style.borderRadius = '5px';
-                    progress.style.transition = 'width 0.5s ease-in-out';
-
-                    const progressText = document.createElement('span');
-                    progressText.textContent = `${task.progress}%`;
-                    progressText.style.position = 'absolute';
-                    progressText.style.right = '5px';
-                    progressText.style.top = '50%';
-                    progressText.style.transform = 'translateY(-50%)';
-                    progressText.style.color = 'white';
-                    progressText.style.fontWeight = 'bold';
-
-                    progressBar.appendChild(progress);
-                    progressBar.appendChild(progressText);
-                    barContainer.appendChild(progressBar);
-
-                    progressBars.appendChild(barContainer);
                 });
-        })
-        .catch(error => {
-            console.error('Error fetching task data:', error);
-            const progressBars = document.getElementById('progressBars');
-            progressBars.innerHTML = `<p style="color: red;">Failed to load task data: ${error.message}</p>`;
+
+                // Enhanced Due Date Progress Bars
+                const progressBars = document.getElementById('progressBars');
+                progressBars.innerHTML = '';
+                data.tasks			
+					.forEach(task => {
+				                    const barContainer = document.createElement('div');
+				                    barContainer.style.margin = '15px 0';
+				                    barContainer.style.display = 'flex';
+				                    barContainer.style.alignItems = 'center';
+
+				                    const label = document.createElement('div');
+				                    label.style.width = '30%';
+				                    label.style.fontWeight = 'bold';
+				                    label.innerHTML = `
+				                        <span>${task.name}</span><br>
+				                        <small style="color: #666;">${task.due_date || 'No Due Date'}</small>
+				                    `;
+				                    barContainer.appendChild(label);
+
+				                    const progressBar = document.createElement('div');
+				                    progressBar.style.width = '70%';
+				                    progressBar.style.backgroundColor = '#eee';
+				                    progressBar.style.borderRadius = '5px';
+				                    progressBar.style.position = 'relative';
+				                    progressBar.style.height = '20px'; /* Reduced height for a slimmer look */
+
+				                    const progress = document.createElement('div');
+				                    progress.style.width = `${task.progress}%`;
+				                    progress.style.height = '100%';
+									let color;
+									if (task.progress > 90) {
+									    color = 'linear-gradient(to right, #228B22, #006400)'; // Dark Green to Green
+									} else if (task.progress > 75) {
+									    color = 'linear-gradient(to right, #228B22, #32CD32)'; // Light Green to Green
+									} else if (task.progress > 60) {
+									    color = 'linear-gradient(to right, #ADFF2F, #32CD32)'; // Yellow Green to Light Green
+									} else if (task.progress > 45) {
+									    color = 'linear-gradient(to right, #FFFF00, #ADFF2F)'; // Yellow to Yellow Green
+									} else if (task.progress > 30) {
+									    color = 'linear-gradient(to right, #FFA500, #FFFF00)'; // Orange to Yellow
+									} else {
+									    color = 'linear-gradient(to right, #FF0000,  #FFFF00)'; // Red to Orange
+									}
+									progress.style.background = color;
+
+
+				                    progress.style.borderRadius = '5px';
+				                    progress.style.transition = 'width 0.5s ease-in-out';
+
+				                    const progressText = document.createElement('span');
+				                    progressText.textContent = `${task.progress}%`;
+				                    progressText.style.position = 'absolute';
+				                    progressText.style.right = '5px';
+				                    progressText.style.top = '50%';
+				                    progressText.style.transform = 'translateY(-50%)';
+				                    progressText.style.color = 'white';
+				                    progressText.style.fontWeight = 'bold';
+
+				                    progressBar.appendChild(progress);
+				                    progressBar.appendChild(progressText);
+				                    barContainer.appendChild(progressBar);
+
+				                    progressBars.appendChild(barContainer);
+				                });
+            } catch (error) {
+                console.error('Error fetching chart data:', error);
+            }
+        }
+
+        // Initial data load
+        fetchChartData();
+
+        // Form submission handler
+        dateRangeForm.addEventListener('submit', (e) => {
+            e.preventDefault();
+            const startDate = startDateInput.value;
+            const endDate = endDateInput.value;
+
+            if (startDate && endDate) {
+                if (new Date(startDate) > new Date(endDate)) {
+                    alert('Start date must be before or equal to end date');
+                    return;
+                }
+                fetchChartData(startDate, endDate);
+            } else {
+                alert('Please select both start and end dates');
+            }
         });
+
+        // Reset button handler
+        resetButton.addEventListener('click', () => {
+            startDateInput.value = '';
+            endDateInput.value = '';
+            fetchChartData();
+        });
+    });
 </script>
 {% endblock %}

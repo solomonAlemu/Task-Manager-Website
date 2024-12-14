@@ -4,7 +4,26 @@
 <div class="container">
     <h2>Monthly Progress</h2>
 
+    <!-- Date Range Selection -->
+    <div class="date-range-selector mb-4">
+        <form id="dateRangeForm" class="row g-3 align-items-center">
+            <div class="col-auto">
+                <label for="startDate" class="form-label">Start Date:</label>
+                <input type="date" class="form-control" id="startDate" name="startDate">
+            </div>
+            <div class="col-auto">
+                <label for="endDate" class="form-label">End Date:</label>
+                <input type="date" class="form-control" id="endDate" name="endDate">
+            </div>
+            <div class="col-auto">
+                <button type="submit" class="btn btn-primary">Apply</button>
+                <button type="button" id="resetDateRange" class="btn btn-secondary">Reset</button>
+            </div>
+        </form>
+    </div>
+
     <div class="chart-grid">
+        <!-- Existing chart placeholders remain the same -->
         <!-- Task Completion by Priority -->
         <div class="chart-item">
             <h3>Priority vs Completion %</h3>
@@ -63,119 +82,184 @@
     max-width: 100%;
     max-height: 350px; /* Chart height */
 }
+
+.date-range-selector {
+    background-color: #f8f9fa;
+    padding: 15px;
+    border-radius: 10px;
+    margin-bottom: 20px;
+}
 </style>
 
 <script src="/static/chart.min.js"></script>
 
 <script>
-    document.addEventListener("DOMContentLoaded", async () => {
-        try {
-            const response = await fetch("/monthly-progress-data");
-            const data = await response.json();
-            
-            const chartOptions = {
-                responsive: true,
-                maintainAspectRatio: false, 
-                layout: { padding: 20 },
-                scales: {
-                    x: { ticks: { font: { size: 14 } } },
-                    y: { beginAtZero: true, ticks: { font: { size: 14 } } }
-                },
-                plugins: {
-                    legend: { labels: { font: { size: 16 } } },
-                    tooltip: { bodyFont: { size: 14 }, titleFont: { size: 16 } }
-                }
-            };
+    document.addEventListener("DOMContentLoaded", () => {
+        const chartOptions = {
+            responsive: true,
+            maintainAspectRatio: false, 
+            layout: { padding: 20 },
+            scales: {
+                x: { ticks: { font: { size: 14 } } },
+                y: { beginAtZero: true, ticks: { font: { size: 14 } } }
+            },
+            plugins: {
+                legend: { labels: { font: { size: 16 } } },
+                tooltip: { bodyFont: { size: 14 }, titleFont: { size: 16 } }
+            }
+        };
 
-            // Priority vs Completion %
-            new Chart(document.getElementById("priorityCompletionChart").getContext("2d"), {
-                type: "bar",
-                data: {
-                    labels: Object.keys(data.priority_completion),
-                    datasets: [{
-                        label: "Completion % by Priority",
-                        data: Object.values(data.priority_completion),
-                        backgroundColor: ["#FF0000", "#FFA500", "#00FFFF", "#808080"]
-                    }]
-                },
-                options: { ...chartOptions }
-            });
+        const dateRangeForm = document.getElementById('dateRangeForm');
+        const resetButton = document.getElementById('resetDateRange');
+        const startDateInput = document.getElementById('startDate');
+        const endDateInput = document.getElementById('endDate');
 
-            // Monthly Task Progress
-            new Chart(document.getElementById("taskProgressChart").getContext("2d"), {
-                type: "bar",
-                data: {
-                    labels: data.task_progress.labels,
-                    datasets: [
-                        { label: "Completed", data: data.task_progress.completed, backgroundColor: "#4BC0C0" },
-                        { label: "In Progress", data: data.task_progress.in_progress, backgroundColor: "#FF9F40" },
-                        { label: "Open", data: data.task_progress.open, backgroundColor: "#FF6384" }
-                    ]
-                },
-                options: { ...chartOptions }
-            });
+        // Set max date to today
+        const today = new Date().toISOString().split('T')[0];
+        startDateInput.max = today;
+        endDateInput.max = today;
 
-            // Monthly Action Item Progress
-            new Chart(document.getElementById("actionProgressChart").getContext("2d"), {
-                type: "bar",
-                data: {
-                    labels: data.action_progress.labels,
-                    datasets: [
-                        { label: "Completed", data: data.action_progress.completed, backgroundColor: "#4BC0C0" },
-                        { label: "In Progress", data: data.action_progress.in_progress, backgroundColor: "#FF9F40" },
-                        { label: "Open", data: data.action_progress.open, backgroundColor: "#FF6384" }
-                    ]
-                },
-                options: { ...chartOptions }
-            });
+        // Fetch and render charts
+        async function fetchChartData(startDate = null, endDate = null) {
+            try {
+                const url = new URL("/monthly-progress-data", window.location.origin);
+                if (startDate) url.searchParams.append('start_date', startDate);
+                if (endDate) url.searchParams.append('end_date', endDate);
 
-            // Action Item Status Breakdown
-            new Chart(document.getElementById("actionStatusChart").getContext("2d"), {
-                type: "pie",
-                data: {
-                    labels: Object.keys(data.status_breakdown),
-                    datasets: [{
-                        label: "Action Item Status",
-                        data: Object.values(data.status_breakdown),
-                        backgroundColor: ["#4BC0C0", "#FF9F40", "#FF6384"]
-                    }]
-                },
-                options: { ...chartOptions }
-            });
+                const response = await fetch(url);
+                const data = await response.json();
 
-            // Total Tasks by Priority
-            new Chart(document.getElementById("totalTasksByPriorityChart").getContext("2d"), {
-                type: "bar",
-                data: {
-                    labels: Object.keys(data.total_tasks_by_priority),
-                    datasets: [{
-                        label: "Total Tasks by Priority",
-                        data: Object.values(data.total_tasks_by_priority),
-                        backgroundColor: ["#FF0000", "#FFA500", "#00FFFF", "#808080"]
-                    }]
-                },
-                options: { ...chartOptions }
-            });
+                // Clear existing charts (if any)
+                ['priorityCompletionChart', 'taskProgressChart', 'actionProgressChart', 
+                 'actionStatusChart', 'totalTasksByPriorityChart', 'taskCompletionTimelineChart']
+                .forEach(chartId => {
+                    const canvas = document.getElementById(chartId);
+                    const existingChart = Chart.getChart(canvas);
+                    if (existingChart) existingChart.destroy();
+                });
 
-            // Task Completion Timeline
-            new Chart(document.getElementById("taskCompletionTimelineChart").getContext("2d"), {
-                type: "line",
-                data: {
-                    labels: data.task_completion_timeline.dates,
-                    datasets: [{
-                        label: "Completed Tasks Over Time",
-                        data: data.task_completion_timeline.completed_tasks,
-                        backgroundColor: "#4BC0C0",
-                        borderColor: "#4BC0C0",
-                        fill: false
-                    }]
-                },
-                options: { ...chartOptions }
-            });
+                // Re-render all charts with new data
+                // (Chart rendering code remains the same as in the previous implementation)
+                // ... (previous chart rendering code)
+                
+                // Priority vs Completion %
+                new Chart(document.getElementById("priorityCompletionChart").getContext("2d"), {
+                    type: "bar",
+                    data: {
+                        labels: Object.keys(data.priority_completion),
+                        datasets: [{
+                            label: "Completion % by Priority",
+                            data: Object.values(data.priority_completion),
+                            backgroundColor: ["#FF0000", "#FFA500", "#00FFFF", "#808080"]
+                        }]
+                    },
+                    options: { ...chartOptions }
+                });
 
-        } catch (error) {
-            console.error("Error loading chart data:", error);
+                // Monthly Task Progress
+                new Chart(document.getElementById("taskProgressChart").getContext("2d"), {
+                    type: "bar",
+                    data: {
+                        labels: data.task_progress.labels,
+                        datasets: [
+                            { label: "Completed", data: data.task_progress.completed, backgroundColor: "#4BC0C0" },
+                            { label: "In Progress", data: data.task_progress.in_progress, backgroundColor: "#FF9F40" },
+                            { label: "Open", data: data.task_progress.open, backgroundColor: "#FF6384" }
+                        ]
+                    },
+                    options: { ...chartOptions }
+                });
+
+                // Monthly Action Item Progress
+                new Chart(document.getElementById("actionProgressChart").getContext("2d"), {
+                    type: "bar",
+                    data: {
+                        labels: data.action_progress.labels,
+                        datasets: [
+                            { label: "Completed", data: data.action_progress.completed, backgroundColor: "#4BC0C0" },
+                            { label: "In Progress", data: data.action_progress.in_progress, backgroundColor: "#FF9F40" },
+                            { label: "Open", data: data.action_progress.open, backgroundColor: "#FF6384" }
+                        ]
+                    },
+                    options: { ...chartOptions }
+                });
+
+                // Action Item Status Breakdown
+                new Chart(document.getElementById("actionStatusChart").getContext("2d"), {
+                    type: "pie",
+                    data: {
+                        labels: Object.keys(data.status_breakdown),
+                        datasets: [{
+                            label: "Action Item Status",
+                            data: Object.values(data.status_breakdown),
+                            backgroundColor: ["#4BC0C0", "#FF9F40", "#FF6384"]
+                        }]
+                    },
+                    options: { ...chartOptions }
+                });
+
+                // Total Tasks by Priority
+                new Chart(document.getElementById("totalTasksByPriorityChart").getContext("2d"), {
+                    type: "bar",
+                    data: {
+                        labels: Object.keys(data.total_tasks_by_priority || {}),
+                        datasets: [{
+                            label: "Total Tasks by Priority",
+                            data: Object.values(data.total_tasks_by_priority || {}),
+                            backgroundColor: ["#FF0000", "#FFA500", "#00FFFF", "#808080"]
+                        }]
+                    },
+                    options: { ...chartOptions }
+                });
+
+                // Task Completion Timeline
+                new Chart(document.getElementById("taskCompletionTimelineChart").getContext("2d"), {
+                    type: "line",
+                    data: {
+                        labels: data.task_completion_timeline.dates,
+                        datasets: [{
+                            label: "Completed Tasks Over Time",
+                            data: data.task_completion_timeline.completed_tasks,
+                            backgroundColor: "#4BC0C0",
+                            borderColor: "#4BC0C0",
+                            fill: false
+                        }]
+                    },
+                    options: { ...chartOptions }
+                });
+
+            } catch (error) {
+                console.error("Error loading chart data:", error);
+            }
         }
+
+        // Initial data load
+        fetchChartData();
+
+        // Form submission handler
+        dateRangeForm.addEventListener('submit', (e) => {
+            e.preventDefault();
+            const startDate = startDateInput.value;
+            const endDate = endDateInput.value;
+
+            if (startDate && endDate) {
+                // Validate date range
+                if (new Date(startDate) > new Date(endDate)) {
+                    alert('Start date must be before or equal to end date');
+                    return;
+                }
+                fetchChartData(startDate, endDate);
+            } else {
+                alert('Please select both start and end dates');
+            }
+        });
+
+        // Reset button handler
+        resetButton.addEventListener('click', () => {
+            startDateInput.value = '';
+            endDateInput.value = '';
+            fetchChartData(); // Fetch default data
+        });
     });
 </script>
 {% endblock %}
