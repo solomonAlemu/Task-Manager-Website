@@ -137,9 +137,8 @@
 		    <div class="grid-item">
 			<button type="submit" class="status-btn"onclick="return confirm('Are you sure you want to update this item?')">Update</button>
 		    </div>
-		</div>
-		</form>
 
+		</form>
 		<!-- Delete Task -->
 		<form action="/delete/{{ task[0] }}" method="POST" class="delete-form">
 		<button
@@ -150,7 +149,8 @@
 		    Delete
 		</button>
 		</form>
-                </td>
+		</div>
+      </td>
 
 		    <td class="updates" >{{ task[7] }}</tdclass="email-recipient-list form-control">
                     <!-- Email Notification Column -->

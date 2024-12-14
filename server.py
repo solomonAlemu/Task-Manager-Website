@@ -1,14 +1,19 @@
-from flask import Flask, render_template, request, redirect, url_for, jsonify
+from flask import Flask, render_template, request, redirect, url_for, jsonify, session
 import sqlite3
 import os
 from datetime import datetime 
 import json
+import bcrypt
+import re
+import pandas as pd  # Import pandas to handle Excel/CSV files
 
 from email_config import EmailManager
 from email_sender import EmailNotifier
+from user_management import UserApp
 
 app = Flask(__name__)
 DATABASE = 'tasks.db'
+app.secret_key = os.environ.get('SECRET_KEY', 'your_very_secret_key_here')  # In production, use a secure random key
 
 # Initialize email manager
 email_manager = EmailManager()
@@ -42,6 +47,7 @@ def init_db():
             FOREIGN KEY(monthly_action_id) REFERENCES monthly_action_items(id)
         )
         ''')
+        
         # Monthly Action Items table (new)
         cursor.execute('''
         CREATE TABLE IF NOT EXISTS monthly_action_items (
@@ -56,6 +62,31 @@ def init_db():
         )
         ''')
         
+        cursor.execute('''
+        CREATE TABLE IF NOT EXISTS users (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            username TEXT UNIQUE NOT NULL,
+            email TEXT UNIQUE NOT NULL,
+            password_hash TEXT NOT NULL,
+            created_at TEXT DEFAULT (DATETIME('now', 'localtime')),
+            last_login TEXT DEFAULT NULL,
+            is_active INTEGER DEFAULT 1,
+            role TEXT DEFAULT 'user'
+        )
+        ''')
+        
+        # Password Reset Tokens table
+        cursor.execute('''
+        CREATE TABLE IF NOT EXISTS password_reset_tokens (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            user_id INTEGER NOT NULL,
+            token TEXT NOT NULL UNIQUE,
+            expires_at TEXT NOT NULL,
+            used INTEGER DEFAULT 0,
+            FOREIGN KEY(user_id) REFERENCES users(id)
+        )
+        ''')
+                
         conn.commit()
 
 if not os.path.exists(DATABASE):
@@ -601,7 +632,44 @@ def email_management():
     """Render the email management page."""
     return render_template('email_management.html')
 
+@app.route('/upload_monthly_actions', methods=['POST'])
+def upload_monthly_actions():
+    """Upload and process an Excel or CSV file to add monthly action items."""
+    file = request.files.get('file')
+    if not file:
+        return "Error: No file uploaded.", 400
+    
+    try:
+        # Determine file type and read into DataFrame
+        if file.filename.endswith('.csv'):
+            df = pd.read_csv(file)
+        elif file.filename.endswith(('.xls', '.xlsx')):
+            df = pd.read_excel(file)
+        else:
+            return "Error: Invalid file format. Please upload an Excel or CSV file.", 400
+        
+        # Validate required columns
+        required_columns = {'description', 'priority', 'due_date', 'notes'}
+        if not required_columns.issubset(df.columns):
+            return f"Error: Missing required columns. Required columns are {', '.join(required_columns)}.", 400
+        
+        # Insert records into the database
+        with get_db_connection() as conn:
+            cursor = conn.cursor()
+            for _, row in df.iterrows():
+                cursor.execute('''
+                    INSERT INTO monthly_action_items 
+                    (description, priority, due_date, notes, status)
+                    VALUES (?, ?, ?, ?, 'Open')
+                ''', (row['description'], row['priority'], row['due_date'], row['notes']))
+            conn.commit()
+        
+        return redirect(url_for('monthly_action'))
+    except Exception as e:
+        print(f"Error processing file: {e}")
+        return "Error: Unable to process the uploaded file.", 500
+
 
 if __name__ == '__main__':
     init_db()
-    app.run(host="0.0.0.0", port=8080, threaded=True, use_reloader=False)
+    app.run(host="0.0.0.0", port=8181, threaded=True, use_reloader=False)

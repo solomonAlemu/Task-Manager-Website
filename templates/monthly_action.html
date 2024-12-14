@@ -51,6 +51,16 @@
 	    </form>
 	    <div id="actionResults"></div> <!-- Container to display fetched action results -->
 	</section>
+	<section>
+	    <h3>Upload Monthly Actions</h3>
+	    <form id="uploadForm" action="{{ url_for('upload_monthly_actions') }}" method="post" enctype="multipart/form-data">
+	        <div class="form-group">
+	            <label for="file">Select File (CSV or Excel):</label>
+	            <input type="file" name="file" id="file" accept=".csv, .xls, .xlsx" required>
+	        </div>
+	        <button type="submit">Upload</button>
+	    </form>
+	</section>
 
 
     <section>
