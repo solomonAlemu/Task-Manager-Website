@@ -101,3 +101,37 @@ Your Team
             return False
         finally:
             pythoncom.CoUninitialize()
+    def send_password_reset_email(recipient_list, subject, email_body):
+ 
+        try:
+            pythoncom.CoInitialize()
+
+            outlook = win32.Dispatch('outlook.application')
+            mail = outlook.CreateItem(0)
+
+            # Generate the salutation
+         
+            salutation = f"Dear User"
+            mail.body = f"""{salutation}
+Greetings!
+
+You have been assigned a new task:
+
+    {email_body}
+ 
+Please take necessary actions.
+
+Best regards,
+Your Task Manager
+                """
+
+            mail.Subject = subject
+            mail.To = recipient_list
+            mail.Send()
+
+            return True
+        except Exception as e:
+            print(f"Email sending error: {e}")
+            return False
+        finally:
+            pythoncom.CoUninitialize()

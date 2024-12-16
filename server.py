@@ -1,11 +1,12 @@
 from flask import Flask, render_template, request, redirect, url_for, jsonify, session
 import sqlite3
 import os
-from datetime import datetime 
+from datetime  import datetime, timedelta  # Import timedelta
 import json
 import bcrypt
 import re
 import pandas as pd  # Import pandas to handle Excel/CSV files
+import secrets  
 
 from email_config import EmailManager
 from email_sender import EmailNotifier
@@ -837,32 +838,6 @@ def email_management():
     """Render the email management page."""
     return render_template('email_management.html')
 
-@app.route('/login', methods=['GET', 'POST'])
-def login():
-    if request.method == 'POST':
-        login_identifier = request.form['login_identifier']
-        password = request.form['password']
-
-        with get_db_connection() as conn:
-            cursor = conn.cursor()
-            cursor.execute('''SELECT * FROM users WHERE username = ? OR email = ?''', (login_identifier, login_identifier))
-            user = cursor.fetchone()
-
-            if user and bcrypt.checkpw(password.encode('utf-8'), user['password_hash']):
-                session['user_id'] = user['id']
-                session['username'] = user['username']
-                cursor.execute('UPDATE users SET last_login = ? WHERE id = ?', (datetime.now(), user['id']))
-                conn.commit()
-                return jsonify(success=True, redirect=url_for('home'))
-            else:
-                return jsonify(success=False, message='Invalid credentials.')
-    return render_template('login.html')
-
-@app.route('/logout')
-def logout():
-    session.clear()
-    return redirect(url_for('login'))
-
 @app.route('/signup', methods=['GET', 'POST'])
 def signup():
     if request.method == 'POST':
@@ -906,6 +881,88 @@ def reset_password():
             else:
                 return jsonify(success=False, message='Email not found.')
     return render_template('reset_password.html')
+
+@app.route('/api/users', methods=['GET', 'POST'])
+def manage_users():
+    if request.method == 'GET':
+        try:
+            with get_db_connection() as conn:
+                cursor = conn.cursor()
+                cursor.execute('SELECT id, username, email, role FROM users')
+                users = cursor.fetchall()
+                return jsonify({"users": [dict(user) for user in users]})
+        except sqlite3.Error as e:
+            print(f"Database error: {e}")
+            return jsonify({"error": "Unable to fetch users."}), 500
+    
+    elif request.method == 'POST':
+        username = request.form.get('username')
+        email = request.form.get('email')
+        password = request.form.get('password')
+        role = request.form.get('role', 'user')
+        
+        if not username or not email or not password:
+            return jsonify({"error": "All fields are required."}), 400
+        
+        password_hash = bcrypt.hashpw(password.encode('utf-8'), bcrypt.gensalt())
+        
+        try:
+            with get_db_connection() as conn:
+                cursor = conn.cursor()
+                cursor.execute('INSERT INTO users (username, email, password_hash, role) VALUES (?, ?, ?, ?)', 
+                               (username, email, password_hash, role))
+                conn.commit()
+            return jsonify({"message": "User added successfully."}), 201
+        except sqlite3.IntegrityError:
+            return jsonify({"error": "Username or email already exists."}), 400
+        except sqlite3.Error as e:
+            print(f"Database error: {e}")
+            return jsonify({"error": "Unable to add user."}), 500
+
+@app.route('/api/users/<int:user_id>', methods=['DELETE'])
+def delete_user(user_id):
+    try:
+        with get_db_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute('DELETE FROM users WHERE id = ?', (user_id,))
+            conn.commit()
+            if cursor.rowcount == 0:
+                return jsonify({"error": "User not found."}), 404
+            return jsonify({"message": "User deleted successfully."}), 200
+    except sqlite3.Error as e:
+        print(f"Database error: {e}")
+        return jsonify({"error": "Unable to delete user."}), 500
+
+@app.route('/login', methods=['GET', 'POST'])
+def login():
+    if request.method == 'POST':
+        login_identifier = request.form['login_identifier']
+        password = request.form['password']
+        
+        with get_db_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute('SELECT * FROM users WHERE username = ? OR email = ?', (login_identifier, login_identifier))
+            user = cursor.fetchone()
+            
+            if user and bcrypt.checkpw(password.encode('utf-8'), user['password_hash']):
+                session['user_id'] = user['id']
+                session['username'] = user['username']
+                cursor.execute('UPDATE users SET last_login = ? WHERE id = ?', (datetime.now(), user['id']))
+                conn.commit()
+                return jsonify(success=True, redirect=url_for('home'))
+            else:
+                return jsonify(success=False, message='Invalid credentials.')
+    
+    return render_template('login.html')
+
+@app.route('/logout')
+def logout():
+    session.clear()
+    return redirect(url_for('login'))
+
+@app.route('/user-management')
+def user_management():
+    return render_template('user_management.html')
 
 @app.route('/reset-password/<token>', methods=['GET', 'POST'])
 def reset_password_confirm(token):
