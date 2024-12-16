@@ -11,6 +11,12 @@ from email_config import EmailManager
 from email_sender import EmailNotifier
 from user_management import UserApp
 
+from flask import send_file
+import csv
+from io import StringIO
+from io import BytesIO, TextIOWrapper
+
+
 app = Flask(__name__)
 DATABASE = 'tasks.db'
 app.secret_key = os.environ.get('SECRET_KEY', 'your_very_secret_key_here')  # In production, use a secure random key
@@ -269,6 +275,69 @@ def fetch_tasks():
     except sqlite3.Error as e:
         print(f"Database error: {e}")
         return jsonify({"success": False, "error": "Unable to fetch tasks"}), 500
+
+from io import BytesIO
+
+@app.route('/export', methods=['GET'])
+def export_tasks():
+    """Export tasks for the logged-in user within a specified date range as a CSV file."""
+    if 'user_id' not in session:
+        return redirect(url_for('login'))
+
+    user_id = session['user_id']
+    start_date = request.args.get('start_date')
+    end_date = request.args.get('end_date')
+
+    try:
+        with get_db_connection() as conn:
+            cursor = conn.cursor()
+            # Base query with user-specific filtering
+            query = """
+                SELECT 
+                    id, assigned_person, description, priority, status, 
+                    percentage_completion, notes, updates, due_date, 
+                    (SELECT description FROM monthly_action_items WHERE id = tasks.monthly_action_id) AS monthly_action
+                FROM tasks
+                WHERE user_id = ?
+            """
+            params = [user_id]
+
+            # Apply date range filtering if provided
+            if start_date and end_date:
+                query += " AND due_date BETWEEN ? AND ?"
+                params.extend([start_date, end_date])
+
+            cursor.execute(query, params)
+            tasks = cursor.fetchall()
+
+        # Prepare CSV content
+        output = BytesIO()
+        text_io = TextIOWrapper(output, encoding='utf-8', newline='')
+        writer = csv.writer(text_io)
+        # Write header
+        writer.writerow([
+            "ID", "Assigned Person", "Description", "Priority", "Status",
+            "Completion (%)", "Notes", "Updates", "Due Date", "Monthly Action"
+        ])
+        # Write task data
+        for task in tasks:
+            writer.writerow(task)
+
+        # Ensure all data is written to the buffer
+        text_io.flush()
+        output.seek(0)  # Reset the buffer pointer to the start
+        text_io.detach()  # Detach the TextIOWrapper to prevent closing BytesIO
+
+        # Send the file as a response
+        return send_file(
+            output,
+            mimetype='text/csv',
+            as_attachment=True,
+            download_name='tasks.csv'
+        )
+    except sqlite3.Error as e:
+        print(f"Database error: {e}")
+        return "Error: Unable to export tasks.", 500
 
 @app.route('/fetch_monthly_actions', methods=['GET'])
 def fetch_actions():
@@ -809,10 +878,11 @@ def signup():
                 cursor.execute('''INSERT INTO users (username, email, password_hash) VALUES (?, ?, ?)''',
                                (username, email, password_hash))
                 conn.commit()
-                return jsonify(success=True, redirect=url_for('login'))
+                return jsonify(success=True, message='Account created successfully.', redirect=url_for('login'))
             except sqlite3.IntegrityError:
                 return jsonify(success=False, message='Username or email already exists.')
     return render_template('signup.html')
+
 
 @app.route('/reset-password', methods=['GET', 'POST'])
 def reset_password():

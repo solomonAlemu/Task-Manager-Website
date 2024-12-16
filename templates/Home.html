@@ -5,14 +5,29 @@
     <!-- Email Management Section -->
  
     <!-- Add Action Button -->
-    <section class="task-actions">
-		<h1>Welcome, {{ session['username'] }}</h1>
-		<h2>Manage Your Tasks</h2>
-        <h3>Add New Tasks</h3>
-	<button id="showFormButton" type="button" class="show-btn">Add Task</button>
+	<!-- Add Action Button -->
+	<section class="task-actions">
+	    <h1>Welcome, {{ session['username'] }}</h1>
+	    <h2>Manage Your Tasks</h2>
+	    <h3>Add New Tasks</h3>
+	    <button id="showFormButton" type="button" class="show-btn">Add Task</button>
 
-    </section>
+	    <!-- Export Button -->
+	    <button id="exportButton" type="button" class="export-btn">Export Tasks</button>
 
+	    <!-- Date Range Form (Initially Hidden) -->
+	    <form id="dateRangeForm" action="{{ url_for('export_tasks') }}" method="GET" style="display: none; margin-top: 20px;">
+	        <div>
+	            <label for="start_date">Start Date:</label>
+	            <input type="date" id="start_date" name="start_date">
+	        </div>
+	        <div>
+	            <label for="end_date">End Date:</label>
+	            <input type="date" id="end_date" name="end_date">
+	        </div>
+	        <button type="submit" class="export-btn">Download CSV</button>
+	    </form>
+	</section>
     <!-- Task Creation Form (Initially Hidden) -->
     <section id="taskFormSection" style="display: none;">
         <h2>Create a Task</h2>
@@ -53,7 +68,7 @@
     <!-- Search Form for Fetching Tasks -->
     <section class="task-search">
         <h3>Fetch Historical Tasks</h3>
-        <form id="fetchForm" class="add-task-form">
+        <form id="fetchForm" class="add-task-form method="GET" style="display: none;">
             <select name="status" id="status">
                 <option value="">All</option>
                 <option value="Open">Open</option>
@@ -359,7 +374,11 @@
         this.submit(); // Submit the form
     });
 	
-
+	// Toggle the visibility of the date range form when the export button is pressed
+	document.getElementById('exportButton').addEventListener('click', function () {
+	    const dateRangeForm = document.getElementById('dateRangeForm');
+	    dateRangeForm.style.display = dateRangeForm.style.display === 'none' ? 'block' : 'none';
+	});
 		
     </script>
 </div>
