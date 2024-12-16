@@ -11,10 +11,9 @@
 	    <h2>Manage Your Tasks</h2>
 	    <h3>Add New Tasks</h3>
 	    <button id="showFormButton" type="button" class="show-btn">Add Task</button>
-
 	    <!-- Export Button -->
 	    <button id="exportButton" type="button" class="export-btn">Export Tasks</button>
-
+		<button type="button" id="showfetchButton" class="btn-fetch">Fetch Tasks</button>
 	    <!-- Date Range Form (Initially Hidden) -->
 	    <form id="dateRangeForm" action="{{ url_for('export_tasks') }}" method="GET" style="display: none; margin-top: 20px;">
 	        <div>
@@ -68,7 +67,7 @@
     <!-- Search Form for Fetching Tasks -->
     <section class="task-search">
         <h3>Fetch Historical Tasks</h3>
-        <form id="fetchForm" class="add-task-form">
+        <form id="fetchForm" class="add-task-form" style="display: none;">
             <select name="status" id="status">
                 <option value="">All</option>
                 <option value="Open">Open</option>
@@ -201,17 +200,14 @@
 	document.getElementById('fetchButton').addEventListener('click', function () {
 	    const status = document.getElementById('status').value;
 	    const keyword = document.getElementById('keyword').value;
-
 	    const params = new URLSearchParams();
 	    if (status) params.append('status', status);
 	    if (keyword) params.append('keyword', keyword);
-
 	    fetch(`/fetch?${params.toString()}`)
 	        .then(response => response.json())
 	        .then(data => {
 	            const taskResults = document.getElementById('taskResults');
 	            taskResults.innerHTML = ''; // Clear previous results
-
 	            if (data.success) {
 	                if (data.tasks.length === 0) {
 	                    taskResults.innerHTML = '<p>No tasks found.</p>';
@@ -234,11 +230,9 @@
 	                            </tr>
 	                        </thead>`;
 	                    table.innerHTML = thead;
-
 	                    const tbody = document.createElement('tbody');
 	                    data.tasks.forEach(task => {
 	                        const row = `
-
 	                            <tr>
 	                                <td>${task.id}</td>
 									<td>${task.assigned_person}</td>
@@ -264,7 +258,6 @@
 	  textarea.addEventListener('change', function() {
 	    const taskId = this.closest('tr').querySelector("td:first-child").textContent;
 	    const noteContent = this.value;
-
 	    fetch(`/update-note/${taskId}`, {
 	      method: 'POST',
 	      headers: { 'Content-Type': 'application/json' },
@@ -286,8 +279,6 @@
         formSection.style.display = "block"; // Show the form section
         this.style.display = "none"; // Hide the "Add Action" button
     });
-
- 
 	function sendTaskEmail(taskId) {
 	    const emailSelect = document.getElementById(`emailSelect_${taskId}`);
 	    const intentSelect = document.getElementById(`emailIntent_${taskId}`);
@@ -297,12 +288,10 @@
 	        return { name: name.trim(), email: email.replace(')', '').trim() };
 	    });
 	    const emailIntent = intentSelect.value;
-
 	    if (recipients.length === 0) {
 	        alert('Please select at least one email recipient');
 	        return;
 	    }
-
 	    fetch('/send-task-email', {
 	        method: 'POST',
 	        headers: {
@@ -337,17 +326,14 @@
 	            console.error('Error fetching emails:', error);
 	        });
 	}
-
 	function displayTextWithNewLines(text, elementId) {
 	    // Replace newline characters with <br> tags
 	    const formattedText = text.replace(/\n/g, '<br>');
 	    // Insert the formatted text into the specified element
 	    document.getElementById(elementId).innerHTML = formattedText;
 	}
-
 	// Example text for demonstration
 	const exampleText = "This is an example text\nthat includes new line characters\nand it should display accordingly.";
-
 	// Call this function for each task after the DOM is loaded
 	document.addEventListener('DOMContentLoaded', () => {
 	    document.querySelectorAll('.updates').forEach((cell, index) => {
@@ -363,9 +349,6 @@
 	        populateEmailDropdown(taskId);
 	    });
 	});
-
-
-
     // Optional: Alert the form action on form submission
     document.getElementById("addTaskForm").addEventListener("submit", function (event) {
         event.preventDefault(); // Prevent immediate form submission
@@ -379,7 +362,12 @@
 	    const dateRangeForm = document.getElementById('dateRangeForm');
 	    dateRangeForm.style.display = dateRangeForm.style.display === 'none' ? 'block' : 'none';
 	});
-		
+
+    document.getElementById('showfetchButton').addEventListener('click', function () {
+        const fetchSection = document.querySelector('.add-task-form');
+        fetchSection.style.display = fetchSection.style.display === 'none' ? 'block' : 'none';
+    });
+
     </script>
 </div>
 {% endblock %}

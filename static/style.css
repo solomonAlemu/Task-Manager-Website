@@ -403,3 +403,71 @@ textarea {
     transform: scale(0.95); /* Slightly shrink on click */
 }
 
+/* General Button Styles */
+#showfetchButton.btn-fetch {
+    display: inline-block;
+    background-color: #3498db; /* Primary blue color */
+    color: #fff;
+    font-size: 16px;
+    font-weight: bold;
+    padding: 10px 20px;
+    border: none;
+    border-radius: 8px;
+    cursor: pointer;
+    text-align: center;
+    text-decoration: none;
+    transition: background-color 0.3s ease, transform 0.2s ease;
+}
+
+#showfetchButton.btn-fetch:hover {
+    background-color: #2980b9; /* Darker blue on hover */
+}
+
+#showfetchButton.btn-fetch:focus {
+    outline: none;
+    box-shadow: 0 0 0 4px rgba(52, 152, 219, 0.5); /* Blue focus ring */
+}
+
+#showfetchButton.btn-fetch:active {
+    background-color: #1c6ea4; /* Even darker blue on click */
+    transform: scale(0.98); /* Slight shrink effect on click */
+}
+.btn-fetch:hover {
+    background-color: #1c6ea4; /* Even darker blue on click */
+    transform: scale(1.05); /* Slightly enlarge on hover */
+}
+ 
+#showUpload.upload-btn {
+    display: inline-block;
+    background-color: #ff9800; /* Primary blue color */
+    color: #fff;
+    font-size: 16px;
+    font-weight: bold;
+    padding: 10px 20px;
+    border: none;
+    border-radius: 8px;
+    cursor: pointer;
+    text-align: center;
+    text-decoration: none;
+    transition: background-color 0.3s ease, transform 0.2s ease;
+}
+
+#showUpload.upload-btn:hover {
+    background-color: rgb(232, 139, 0);/* Darker blue on hover */
+}
+
+#showUpload.upload-btn:focus {
+    outline: none;
+    box-shadow: 0 0 0 4px rgb(232, 139, 0);   
+}
+
+#showUpload.upload-btn:active {
+    background-color: rgb(232, 139, 0);   /* Even darker blue on click */
+    transform: scale(0.98); /* Slight shrink effect on click */
+}
+ 
+.upload-btn:hover {
+    background-color: rgb(232, 139, 0);  /* Darker green on hover */
+    transform: scale(1.05); /* Slightly enlarge on hover */
+}
+ 
