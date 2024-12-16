@@ -29,11 +29,11 @@ def init_db():
     """Initialize the database and create tables if they don't exist."""
     with sqlite3.connect(DATABASE) as conn:
         cursor = conn.cursor()
-        
-        # Tasks table (existing)
+        # Tasks Table (add user_id column)
         cursor.execute('''
         CREATE TABLE IF NOT EXISTS tasks (
-            id INTEGER PRIMARY KEY AUTOINCREMENT, 
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            user_id INTEGER NOT NULL,
             assigned_person TEXT DEFAULT NULL,
             description TEXT NOT NULL,
             priority TEXT NOT NULL,
@@ -44,24 +44,27 @@ def init_db():
             due_date TEXT DEFAULT NULL,
             monthly_action_id INTEGER,
             created_at TEXT DEFAULT (DATETIME('now', 'localtime')),
+            FOREIGN KEY(user_id) REFERENCES users(id),
             FOREIGN KEY(monthly_action_id) REFERENCES monthly_action_items(id)
         )
         ''')
-        
-        # Monthly Action Items table (new)
+
+        # Monthly Action Items Table (add user_id column)
         cursor.execute('''
         CREATE TABLE IF NOT EXISTS monthly_action_items (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
+            user_id INTEGER NOT NULL,
             description TEXT NOT NULL,
             priority TEXT NOT NULL,
             status TEXT NOT NULL DEFAULT 'Open',
             due_date TEXT DEFAULT NULL,
             notes TEXT DEFAULT '',
             percentage_completion INTEGER DEFAULT 0 CHECK(percentage_completion BETWEEN 0 AND 100),
-            created_at TEXT DEFAULT (DATETIME('now', 'localtime'))
+            created_at TEXT DEFAULT (DATETIME('now', 'localtime')),
+            FOREIGN KEY(user_id) REFERENCES users(id)
         )
         ''')
-        
+  
         cursor.execute('''
         CREATE TABLE IF NOT EXISTS users (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -99,32 +102,38 @@ def inject_current_year():
 
 @app.route('/')
 def home():
-    """Render the home page with tasks and monthly action items."""
+    """Render the home page with tasks and monthly action items for the logged-in user."""
+    if 'user_id' not in session:
+        return redirect(url_for('login'))
+
+    user_id = session['user_id']  # Get logged-in user's ID
+
     try:
         with get_db_connection() as conn:
             cursor = conn.cursor()
             
-            # Fetch tasks with their linked Monthly Action Item description
+            # Fetch tasks for the logged-in user
             cursor.execute("""
                 SELECT 
-                    tasks.id,tasks.assigned_person, tasks.description, tasks.priority, tasks.status, 
+                    tasks.id, tasks.assigned_person, tasks.description, tasks.priority, tasks.status, 
                     tasks.percentage_completion, tasks.notes, tasks.updates, 
                     tasks.due_date, monthly_action_items.description AS monthly_action_description
                 FROM tasks
                 LEFT JOIN monthly_action_items
                 ON tasks.monthly_action_id = monthly_action_items.id
-                WHERE tasks.status IN ('Open', 'In Progress')
-            """)
+                WHERE tasks.user_id = ? AND tasks.status IN ('Open', 'In Progress')
+            """, (user_id,))
             tasks = cursor.fetchall()
-            print("Tasks:", tasks)  # Debug print
-            
+
             # Fetch monthly action items for task creation dropdown
-            cursor.execute("SELECT id, description, priority FROM monthly_action_items WHERE status IN ('Open', 'In Progress')")
-            
+            cursor.execute("""
+                SELECT id, description, priority 
+                FROM monthly_action_items 
+                WHERE user_id = ? AND status IN ('Open', 'In Progress')
+            """, (user_id,))
             monthly_actions = cursor.fetchall()
-            print("Monthly Actions:", monthly_actions)  # Debug print
-        
-        return render_template('home.html', tasks=tasks, monthly_actions=monthly_actions)
+
+        return render_template('Home.html', tasks=tasks, monthly_actions=monthly_actions)
     except sqlite3.Error as e:
         print(f"Database error: {e}")
         return f"An error occurred: {e}", 500
@@ -132,24 +141,31 @@ def home():
 # Modify add_task route to support monthly action item linking
 @app.route('/add', methods=['POST'])
 def add_task():
+    """Add a new task for the logged-in user."""
+    if 'user_id' not in session:
+        return redirect(url_for('login'))
+    user_id = session['user_id']  # Get logged-in user's ID
+
+
     """Add a new task with optional monthly action item link."""
+
     assigned_person = request.form.get('assigned_person')
     description = request.form.get('description', '').strip()
     priority = request.form.get('priority', 'Medium')
     due_date = request.form.get('due_date', '').strip()
     monthly_action_id = request.form.get('monthly_action_id')
-
     if not description:
         return "Error: Task description cannot be empty!", 400
 
     try:
-        with sqlite3.connect(DATABASE) as conn:
+        with get_db_connection() as conn:
             cursor = conn.cursor()
             cursor.execute("""
-                INSERT INTO tasks (assigned_person, description, priority, due_date, status, monthly_action_id)
-                VALUES (?,?, ?, ?, 'Open', ?)
-            """, (assigned_person, description, priority, due_date, monthly_action_id))
+                INSERT INTO tasks (user_id, assigned_person, description, priority, due_date, status, monthly_action_id)
+                VALUES (?,?,?, ?, ?, 'Open', ?)
+            """, (user_id, assigned_person, description, priority, due_date, monthly_action_id))
             conn.commit()
+
         return redirect(url_for('home'))
     except sqlite3.Error as e:
         print(f"Database error: {e}")
@@ -157,7 +173,11 @@ def add_task():
 
 @app.route('/update/<int:task_id>', methods=['POST'])
 def update_task(task_id):
-    """Update task details."""
+    """Update task details for the logged-in user."""
+    if 'user_id' not in session:
+        return redirect(url_for('login'))
+
+    user_id = session['user_id']
     assigned_person = request.form.get('assigned_person')
     status = request.form.get('status', 'Open')
     percentage_completion = request.form.get('percentage_completion', '0').strip()
@@ -169,52 +189,65 @@ def update_task(task_id):
         if not 0 <= percentage_completion <= 100:
             return "Error: Completion percentage must be between 0 and 100.", 400
 
-        with sqlite3.connect(DATABASE) as conn:
+        with get_db_connection() as conn:
             cursor = conn.cursor()
-            cursor.execute("SELECT updates FROM tasks WHERE id = ?", (task_id,))
+            cursor.execute("""
+                SELECT updates FROM tasks WHERE id = ? AND user_id = ?
+            """, (task_id, user_id))
             current_updates = cursor.fetchone()
+            if not current_updates:
+                return "Error: Task not found or unauthorized.", 404
+
             updates = current_updates[0] if current_updates else ""
             update_entry = (
-                (current_updates[0] or '') 
-                + f"\n\n== Update ({datetime.now().strftime('%Y-%m-%d %H:%M')})\n{notes or 'No notes'}Status: {status}\n"
+                updates + f"\n\n== Update ({datetime.now().strftime('%Y-%m-%d %H:%M')})\n"
+                          f"{notes or 'No notes'} | Status: {status}\n"
             )
-            #update_entry = f"Updated on {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}: {notes or 'No notes'}\n"
- 
             cursor.execute("""
                 UPDATE tasks SET assigned_person = ?, status = ?, percentage_completion = ?, notes = ?, updates = ?
-                WHERE id = ?
-            """, (assigned_person, status, percentage_completion, notes, update_entry, task_id))
+                WHERE id = ? AND user_id = ?
+            """, (assigned_person, status, percentage_completion, notes, update_entry, task_id, user_id))
             conn.commit()
+
         return redirect(url_for('home'))
     except sqlite3.Error as e:
         print(f"Database error: {e}")
         return "Error: Unable to update task.", 500
 
+
 @app.route('/delete/<int:task_id>', methods=['POST'])
 def delete_task(task_id):
-    """Delete a task."""
+    """Delete a specific task for the logged-in user."""
+    if 'user_id' not in session:
+        return redirect(url_for('login'))
+
+    user_id = session['user_id']
+
     try:
-        with sqlite3.connect(DATABASE) as conn:
+        with get_db_connection() as conn:
             cursor = conn.cursor()
-            cursor.execute("DELETE FROM tasks WHERE id = ?", (task_id,))
+            cursor.execute("DELETE FROM tasks WHERE id = ? AND user_id = ?", (task_id, user_id))
             conn.commit()
+
         return redirect(url_for('home'))
     except sqlite3.Error as e:
         print(f"Database error: {e}")
         return "Error: Unable to delete task.", 500
-
-
+ 
 @app.route('/fetch', methods=['GET'])
 def fetch_tasks():
-    """Fetch tasks based on filters."""
+    """Fetch tasks for the logged-in user based on filters."""
+    if 'user_id' not in session:
+        return jsonify({"success": False, "error": "Unauthorized access."}), 401
+    user_id = session['user_id']
     status = request.args.get('status', '').strip()
     keyword = request.args.get('keyword', '').strip()
 
     try:
         with sqlite3.connect(DATABASE) as conn:
             cursor = conn.cursor()
-            query = "SELECT id,assigned_person, description, status, notes, updates, created_at FROM tasks WHERE 1=1"
-            params = []
+            query = "SELECT id, assigned_person, description, status, notes, updates, created_at FROM tasks WHERE user_id = ?"
+            params = [user_id]
 
             if status:
                 query += " AND status = ?"
@@ -239,19 +272,23 @@ def fetch_tasks():
 
 @app.route('/fetch_monthly_actions', methods=['GET'])
 def fetch_actions():
-    """Fetch monthly actions based on filters."""
+    """Fetch monthly actions for the logged-in user based on filters."""
+    if 'user_id' not in session:
+        return jsonify({"success": False, "error": "Unauthorized access."}), 401
+    user_id = session['user_id']
     status = request.args.get('status', '').strip()
     keyword = request.args.get('keyword', '').strip()
 
     try:
-        with sqlite3.connect(DATABASE) as conn:
+        with get_db_connection() as conn:
             cursor = conn.cursor()
             query = """
                 SELECT id, description, status, notes, due_date, 
                        percentage_completion, created_at 
-                FROM monthly_action_items WHERE 1=1
+                FROM monthly_action_items 
+                WHERE user_id = ?
             """
-            params = []
+            params = [user_id]
 
             if status:
                 query += " AND status = ?"
@@ -284,25 +321,32 @@ def fetch_actions():
 
 @app.route('/delete_historical', methods=['POST'])
 def delete_historical_tasks():
-    """Delete historical tasks."""
+    """Delete historical tasks for the logged-in user."""
+    if 'user_id' not in session:
+        return jsonify({"success": False, "error": "Unauthorized access."}), 401
+
+    user_id = session['user_id']
     status = request.form.get('status', '').strip()
 
     if not status:
         return jsonify({"success": False, "error": "Status is required to delete tasks."}), 400
 
     try:
-        with sqlite3.connect(DATABASE) as conn:
+        with get_db_connection() as conn:
             cursor = conn.cursor()
-            cursor.execute("DELETE FROM tasks WHERE status = ?", (status,))
+            cursor.execute("DELETE FROM tasks WHERE user_id = ? AND status = ?", (user_id, status))
             conn.commit()
-        return jsonify({"success": True, "message": f"Tasks with status '{status}' deleted."})
+        return jsonify({"success": True, "message": f"Tasks with status '{status}' deleted for user {user_id}."})
     except sqlite3.Error as e:
         print(f"Database error: {e}")
         return jsonify({"success": False, "error": "Unable to delete tasks."}), 500
 
 @app.route('/monthly-action', methods=['GET', 'POST'])
 def monthly_action():
-    """Manage monthly action items."""
+    """Manage monthly action items for the logged-in user."""
+    if 'user_id' not in session:
+        return redirect(url_for('login'))
+    user_id = session['user_id']
     if request.method == 'POST':
         description = request.form.get('description')
         priority = request.form.get('priority', 'Medium')
@@ -316,10 +360,9 @@ def monthly_action():
             with sqlite3.connect(DATABASE) as conn:
                 cursor = conn.cursor()
                 cursor.execute('''
-                    INSERT INTO monthly_action_items 
-                    (description, priority, due_date, notes, status)
-                    VALUES (?, ?, ?, ?, 'Open')
-                ''', (description, priority, due_date, notes))
+                    INSERT INTO monthly_action_items (user_id, description, priority, due_date, notes, status)
+                    VALUES (?, ?, ?, ?, ?, 'Open')
+                ''', (user_id, description, priority, due_date, notes))
                 conn.commit()
             return redirect(url_for('monthly_action'))
         except sqlite3.Error as e:
@@ -331,21 +374,23 @@ def monthly_action():
         with sqlite3.connect(DATABASE) as conn:
             cursor = conn.cursor()
             cursor.execute('''
-                SELECT id, description, priority, status, 
-                       due_date, percentage_completion, notes
+                SELECT id, description, priority, status, due_date, percentage_completion, notes
                 FROM monthly_action_items
-                WHERE status IN ('Open', 'In Progress')
+                WHERE user_id = ? AND status IN ('Open', 'In Progress')
                 ORDER BY created_at DESC
-            ''')
+            ''', (user_id,))
             monthly_actions = cursor.fetchall()
         return render_template('monthly_action.html', monthly_actions=monthly_actions)
     except sqlite3.Error as e:
         print(f"Database error: {e}")
         return "Error: Unable to fetch monthly action items.", 500
-    
+  
 @app.route('/update_monthly_action/<int:action_id>', methods=['POST'])
 def update_monthly_action(action_id):
     """Update a monthly action status."""
+    if 'user_id' not in session:
+        return redirect(url_for('login'))    
+    user_id = session['user_id']        
     status = request.form.get('status', 'Open')
     percentage_completion = request.form.get('percentage_completion', '0').strip()
     notes = request.form.get('notes', '').strip()
@@ -355,13 +400,24 @@ def update_monthly_action(action_id):
         if not 0 <= percentage_completion <= 100:
             return "Error: Completion percentage must be between 0 and 100.", 400
 
-        with sqlite3.connect(DATABASE) as conn:
+        with get_db_connection() as conn:
             cursor = conn.cursor()
+            cursor.execute("""
+                SELECT updates FROM tasks WHERE id = ? AND user_id = ?
+            """, (action_id, user_id))
+            current_updates = cursor.fetchone()
+            if not current_updates:
+                return "Error: Task not found or unauthorized.", 404
+            updates = current_updates[0] if current_updates else ""
+            update_entry = (
+                updates + f"\n\n== Update ({datetime.now().strftime('%Y-%m-%d %H:%M')})\n"
+                          f"{notes or 'No notes'} \n"
+            )                
             cursor.execute('''
                 UPDATE monthly_action_items 
                 SET status = ?, percentage_completion = ?, notes = ?
-                WHERE id = ?
-            ''', (status, percentage_completion, notes, action_id))
+                WHERE id = ? AND user_id = ?
+            ''', (status, percentage_completion, update_entry, action_id, user_id))
             conn.commit()
         return redirect(url_for('monthly_action'))
     except sqlite3.Error as e:
@@ -371,13 +427,18 @@ def update_monthly_action(action_id):
 @app.route('/delete_monthly_action/<int:action_id>', methods=['POST'])
 def delete_monthly_action(action_id):
     """Delete a monthly action item."""
+    if 'user_id' not in session:
+        return redirect(url_for('login'))
+
+    user_id = session['user_id']
+    
     try:
         with sqlite3.connect(DATABASE) as conn:
             cursor = conn.cursor()
             # First, remove any linked tasks
-            cursor.execute("DELETE FROM tasks WHERE monthly_action_id = ?", (action_id,))
+            cursor.execute("DELETE FROM tasks WHERE monthly_action_id = ?", (task_id, user_id))
             # Then delete the monthly action item
-            cursor.execute("DELETE FROM monthly_action_items WHERE id = ?", (action_id,))
+            cursor.execute("DELETE FROM monthly_action_items WHERE id = ?", (task_id, user_id))
             conn.commit()
         return redirect(url_for('monthly_action'))
     except sqlite3.Error as e:
@@ -391,8 +452,10 @@ def monthly_progress():
 
 @app.route('/monthly-progress-data')
 def monthly_progress_data():
-    """Provide data for the monthly progress chart with optional date range."""
-    # Get date range from query parameters
+    """Provide monthly progress data for the logged-in user."""
+    if 'user_id' not in session:
+        return jsonify({"success": False, "error": "Unauthorized access."}), 401
+    user_id = session['user_id']
     start_date = request.args.get('start_date')
     end_date = request.args.get('end_date')
 
@@ -400,15 +463,15 @@ def monthly_progress_data():
         with sqlite3.connect(DATABASE) as conn:
             cursor = conn.cursor()
             
-            # Base query conditions
-            task_base_query = "FROM tasks WHERE 1=1"
-            action_base_query = "FROM monthly_action_items WHERE 1=1"
-            
+            # Add user filter
+            task_base_query = "FROM tasks WHERE user_id = ?"
+            action_base_query = "FROM monthly_action_items WHERE user_id = ?"
+            params = [user_id]
+
             # Date range filtering
             if start_date and end_date:
                 task_base_query += f" AND (due_date BETWEEN '{start_date}' AND '{end_date}')"
-                action_base_query += f" AND (due_date BETWEEN '{start_date}' AND '{end_date}')"
-            
+                action_base_query += f" AND (due_date BETWEEN '{start_date}' AND '{end_date}')"         
             # 1. Priority vs Completion Percentage
             cursor.execute(f"""
                 SELECT priority, 
@@ -494,15 +557,85 @@ def monthly_progress_data():
         print(f"Database error: {e}")
         return jsonify({"error": "Failed to fetch progress data."}), 500
 
+@app.route('/upload_monthly_actions', methods=['POST'])
+def upload_monthly_actions():
+    """Upload and process monthly action items for the logged-in user."""
+    if 'user_id' not in session:
+        return "Error: Unauthorized access.", 401
+
+    user_id = session['user_id']
+    file = request.files.get('file')
+    if not file:
+        return "Error: No file uploaded.", 400
+    
+    try:
+        # Determine file type and read into DataFrame
+        if file.filename.endswith('.csv'):
+            df = pd.read_csv(file)
+        elif file.filename.endswith(('.xls', '.xlsx')):
+            df = pd.read_excel(file)
+        else:
+            return "Error: Invalid file format. Please upload an Excel or CSV file.", 400
+        
+        # Normalize column names
+        df.columns = [col.strip().lower() for col in df.columns]
+        
+        # Validate required columns
+        required_columns = {'description', 'priority', 'due_date', 'notes'}
+        if not required_columns.issubset(df.columns):
+            return f"Error: Missing required columns. Required columns are {', '.join(required_columns)}.", 400
+        
+        # Clean and validate data
+        invalid_rows = []
+        for index, row in df.iterrows():
+            # Validate required fields
+            if pd.isna(row['description']) or pd.isna(row['priority']):
+                invalid_rows.append(index + 1)
+                continue
+
+            # Validate date
+            try:
+                row['due_date'] = pd.to_datetime(row['due_date']).date() if not pd.isna(row['due_date']) else None
+            except ValueError:
+                invalid_rows.append(index + 1)
+                continue
+            
+            # Ensure priority is valid
+            if str(row['priority']).capitalize() not in ['High', 'Medium', 'Low']:
+                invalid_rows.append(index + 1)
+                continue
+            
+            # Prepare row for insertion
+            with get_db_connection() as conn:
+                cursor = conn.cursor()
+                cursor.execute('''
+                    INSERT INTO monthly_action_items 
+                    (description, priority, due_date, notes, status)
+                    VALUES (?, ?, ?, ?, 'Open')
+                ''', (row['description'], row['priority'].capitalize(), row['due_date'], row['notes']))
+                conn.commit()
+
+        # Return success and invalid row information
+        if invalid_rows:
+            return f"Upload completed with errors. Invalid rows: {invalid_rows}", 200
+        
+        return redirect(url_for('monthly_action'))
+    except Exception as e:
+        print(f"Error processing file: {e}")
+        return f"Error: Unable to process the uploaded file. Details: {str(e)}", 500
+ 
 @app.route('/task_charts')
 def task_charts():
     """Render the Task Progress Charts page."""
     return render_template('task_charts.html')
-
- 
+  
 @app.route('/task-data', methods=['GET'])
 def task_data():
-    """Provide task data for charts and progress bars."""
+    """Provide task data for charts for the logged-in user."""
+    if 'user_id' not in session:
+        return jsonify({"success": False, "error": "Unauthorized access."}), 401
+
+    user_id = session['user_id']
     start_date = request.args.get('start_date')
     end_date = request.args.get('end_date')
 
@@ -518,11 +651,11 @@ def task_data():
                     percentage_completion AS progress, 
                     due_date 
                 FROM tasks
-                WHERE status IN ('Open', 'In Progress', 'Completed')
+                WHERE user_id = ? AND status IN ('Open', 'In Progress', 'Completed')
             '''
+            params = [user_id]
 
             # Add date filter if provided
-            params = []
             if start_date and end_date:
                 query += ' AND due_date BETWEEN ? AND ?'
                 params.extend([start_date, end_date])
@@ -547,12 +680,15 @@ def task_data():
     except sqlite3.Error as e:
         print(f"Database error: {e}")
         return jsonify({"error": "Failed to fetch task data."}), 500
-
-
+ 
 # Add new routes for email management
 @app.route('/manage-emails', methods=['GET', 'POST'])
 def manage_emails():
-    """Manage email configurations."""
+    """Manage email configurations for the logged-in user."""
+    if 'user_id' not in session:
+        return jsonify({"success": False, "error": "Unauthorized access."}), 401
+
+    user_id = session['user_id']
     if request.method == 'POST':
         name = request.form.get('name')
         email = request.form.get('email')
@@ -632,43 +768,95 @@ def email_management():
     """Render the email management page."""
     return render_template('email_management.html')
 
-@app.route('/upload_monthly_actions', methods=['POST'])
-def upload_monthly_actions():
-    """Upload and process an Excel or CSV file to add monthly action items."""
-    file = request.files.get('file')
-    if not file:
-        return "Error: No file uploaded.", 400
-    
-    try:
-        # Determine file type and read into DataFrame
-        if file.filename.endswith('.csv'):
-            df = pd.read_csv(file)
-        elif file.filename.endswith(('.xls', '.xlsx')):
-            df = pd.read_excel(file)
-        else:
-            return "Error: Invalid file format. Please upload an Excel or CSV file.", 400
-        
-        # Validate required columns
-        required_columns = {'description', 'priority', 'due_date', 'notes'}
-        if not required_columns.issubset(df.columns):
-            return f"Error: Missing required columns. Required columns are {', '.join(required_columns)}.", 400
-        
-        # Insert records into the database
+@app.route('/login', methods=['GET', 'POST'])
+def login():
+    if request.method == 'POST':
+        login_identifier = request.form['login_identifier']
+        password = request.form['password']
+
         with get_db_connection() as conn:
             cursor = conn.cursor()
-            for _, row in df.iterrows():
-                cursor.execute('''
-                    INSERT INTO monthly_action_items 
-                    (description, priority, due_date, notes, status)
-                    VALUES (?, ?, ?, ?, 'Open')
-                ''', (row['description'], row['priority'], row['due_date'], row['notes']))
-            conn.commit()
-        
-        return redirect(url_for('monthly_action'))
-    except Exception as e:
-        print(f"Error processing file: {e}")
-        return "Error: Unable to process the uploaded file.", 500
+            cursor.execute('''SELECT * FROM users WHERE username = ? OR email = ?''', (login_identifier, login_identifier))
+            user = cursor.fetchone()
 
+            if user and bcrypt.checkpw(password.encode('utf-8'), user['password_hash']):
+                session['user_id'] = user['id']
+                session['username'] = user['username']
+                cursor.execute('UPDATE users SET last_login = ? WHERE id = ?', (datetime.now(), user['id']))
+                conn.commit()
+                return jsonify(success=True, redirect=url_for('home'))
+            else:
+                return jsonify(success=False, message='Invalid credentials.')
+    return render_template('login.html')
+
+@app.route('/logout')
+def logout():
+    session.clear()
+    return redirect(url_for('login'))
+
+@app.route('/signup', methods=['GET', 'POST'])
+def signup():
+    if request.method == 'POST':
+        username = request.form['username']
+        email = request.form['email']
+        password = request.form['password']
+
+        password_hash = bcrypt.hashpw(password.encode('utf-8'), bcrypt.gensalt())
+
+        with get_db_connection() as conn:
+            try:
+                cursor = conn.cursor()
+                cursor.execute('''INSERT INTO users (username, email, password_hash) VALUES (?, ?, ?)''',
+                               (username, email, password_hash))
+                conn.commit()
+                return jsonify(success=True, redirect=url_for('login'))
+            except sqlite3.IntegrityError:
+                return jsonify(success=False, message='Username or email already exists.')
+    return render_template('signup.html')
+
+@app.route('/reset-password', methods=['GET', 'POST'])
+def reset_password():
+    if request.method == 'POST':
+        email = request.form['email']
+        token = secrets.token_urlsafe(16)
+        expires_at = datetime.now() + timedelta(hours=1)
+
+        with get_db_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute('''SELECT id FROM users WHERE email = ?''', (email,))
+            user = cursor.fetchone()
+
+            if user:
+                cursor.execute('''INSERT INTO password_reset_tokens (user_id, token, expires_at) VALUES (?, ?, ?)''',
+                               (user['id'], token, expires_at))
+                conn.commit()
+                # Replace with actual email sending logic
+                print(f"Password reset link: {url_for('reset_password_confirm', token=token, _external=True)}")
+                return jsonify(success=True)
+            else:
+                return jsonify(success=False, message='Email not found.')
+    return render_template('reset_password.html')
+
+@app.route('/reset-password/<token>', methods=['GET', 'POST'])
+def reset_password_confirm(token):
+    if request.method == 'POST':
+        new_password = request.form['new_password']
+        with get_db_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute('''SELECT * FROM password_reset_tokens WHERE token = ? AND expires_at > ? AND used = 0''',
+                           (token, datetime.now()))
+            token_record = cursor.fetchone()
+
+            if token_record:
+                password_hash = bcrypt.hashpw(new_password.encode('utf-8'), bcrypt.gensalt())
+                cursor.execute('''UPDATE users SET password_hash = ? WHERE id = ?''',
+                               (password_hash, token_record['user_id']))
+                cursor.execute('''UPDATE password_reset_tokens SET used = 1 WHERE id = ?''', (token_record['id'],))
+                conn.commit()
+                return jsonify(success=True, message='Password updated successfully.', redirect=url_for('login'))
+            else:
+                return jsonify(success=False, message='Invalid or expired token.')
+    return render_template('reset_password_confirm.html')
 
 if __name__ == '__main__':
     init_db()

@@ -89,14 +89,20 @@
 <body>
     <!-- Header Section -->
     <header>
-		<img src="/static/et-logo-05.png" alt="Header Image"> 
+        <img src="/static/et-logo-05.png" alt="Header Image">
         <nav>
             <ul class="nav-links">
                 <li><a href="{{ url_for('home') }}">Home</a></li>
 				<li><a href="{{ url_for('monthly_action') }}">Monthly Actions</a></li>
 				<li><a href="{{ url_for('monthly_progress') }}">Monthly Progress</a></li>
                 <li><a href="{{ url_for('task_charts') }}">Task Progress</a></li>
-				<li><a href="{{ url_for('email_management') }}">Email Management</a></li>
+                <li><a href="{{ url_for('email_management') }}">Email Management</a></li>
+                {% if session.get('user_id') %}
+                    <li><a href="{{ url_for('logout') }}">Logout</a></li>
+                {% else %}
+                    <li><a href="{{ url_for('login') }}">Login</a></li>
+                    <li><a href="{{ url_for('signup') }}">Signup</a></li>
+                {% endif %}
             </ul>
         </nav>
     </header>
