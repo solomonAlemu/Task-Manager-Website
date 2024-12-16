@@ -366,8 +366,7 @@ textarea {
     padding: 10px;
     border: 1px solid #ccc;
     border-radius: 5px;
-    background-color: #f9f9f9;
-    display: none; /* Initially hidden */
+    background-color: rgb(147, 147, 147);
 }
 
 #dateRangeForm label {

@@ -39,10 +39,9 @@
 
 <style>
 /* Grid layout for charts */
- 
 .chart-grid {
     display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); /* Auto-adjust columns */
+    grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); /* Flexible column layout */
     gap: 20px; /* Space between charts */
 }
 
@@ -56,7 +55,7 @@
 
 .chart-canvas {
     max-width: 100%;
-    max-height: 350px; /* Chart height */
+    max-height: 350px; /* Maximum chart height */
 }
 
 .date-range-selector {
@@ -67,12 +66,11 @@
 }
 
 .chart-title {
-    word-wrap: break-word; /* Wrap chart title text */
-    white-space: normal; /* Ensure normal wrapping */
-    overflow-wrap: break-word; /* Compatibility for older browsers */
+    word-wrap: break-word; /* Ensure title text wraps cleanly */
+    white-space: normal;
+    overflow-wrap: break-word;
 }
 </style>
-
 <script>
     document.addEventListener("DOMContentLoaded", () => {
         const dateRangeForm = document.getElementById('dateRangeForm');
