@@ -403,7 +403,7 @@ def update_monthly_action(action_id):
         with get_db_connection() as conn:
             cursor = conn.cursor()
             cursor.execute("""
-                SELECT updates FROM tasks WHERE id = ? AND user_id = ?
+                SELECT notes FROM monthly_action_items WHERE id = ? AND user_id = ?
             """, (action_id, user_id))
             current_updates = cursor.fetchone()
             if not current_updates:
