@@ -124,7 +124,7 @@ form button:hover {
 table {
     width: 100%;
     border-collapse: collapse;
-    margin-bottom: 20px;
+    margin-bottom: 10px;
 }
 
 table th, table td {
@@ -161,7 +161,7 @@ table th, table td {
 	 width: 6%; 
  }   /* Due Date */
 .task-list th:nth-child(8) { width: 5%; }    /* Completion */
-.task-list th:nth-child(9) { width: 15%; }   /* Actions */
+.task-list th:nth-child(9) { width: 20%; }   /* Actions */
 .task-list th:nth-child(10) { 
 	white-space: pre-wrap; /* Preserve white-space and wrap text */
 	word-wrap: break-word; /* Break long words to wrap within the container */

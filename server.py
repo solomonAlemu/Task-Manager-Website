@@ -1,4 +1,7 @@
 from flask import Flask, render_template, request, redirect, url_for, jsonify, session
+from apscheduler.schedulers.background import BackgroundScheduler
+from flask import Flask
+import atexit
 import sqlite3
 import os
 from datetime  import datetime, timedelta  # Import timedelta
@@ -17,15 +20,28 @@ import csv
 from io import StringIO
 from io import BytesIO, TextIOWrapper
 
-
+# Initialize Flask app
 app = Flask(__name__)
 DATABASE = 'tasks.db'
-app.secret_key = os.environ.get('SECRET_KEY', 'your_very_secret_key_here')  # In production, use a secure random key
+app.secret_key = os.environ.get('SECRET_KEY', 'your_very_secret_key_here')
 
-# Initialize email manager
-email_manager = EmailManager()
-email_notifier = EmailNotifier()
+# Define cleanup function
+def cleanup_expired_tokens():
+    """
+    Cleans up expired password reset tokens from the database.
+    This function removes tokens that have expired and are no longer valid.
+    """
+    try:
+        with get_db_connection() as conn:
+            cursor = conn.cursor()
+            # Delete tokens that are expired (where expires_at < current time)
+            cursor.execute('''DELETE FROM password_reset_tokens WHERE expires_at <= ?''', (datetime.now(),))
+            conn.commit()
+            print(f"Expired tokens cleaned up successfully at {datetime.now()}.")
+    except sqlite3.Error as e:
+        print(f"Database error in cleanup_expired_tokens: {e}")
 
+# Database connection function
 def get_db_connection():
     """Establish a connection to the database."""
     conn = sqlite3.connect(DATABASE)
@@ -99,14 +115,23 @@ def init_db():
                 
         conn.commit()
 
+# Initialize the database if not already done
 if not os.path.exists(DATABASE):
     init_db()
 
-@app.context_processor
-def inject_current_year():
-    """Inject the current year into templates."""
-    return {'current_year': datetime.now().year}
+# Initialize email manager and other components (you can add your components here)
+email_manager = EmailManager()
+email_notifier = EmailNotifier()
 
+# Initialize APScheduler
+scheduler = BackgroundScheduler()
+
+# Add job to run the cleanup_expired_tokens function every hour
+scheduler.add_job(func=cleanup_expired_tokens, trigger='interval', hours=1)
+
+# Start the scheduler
+scheduler.start()
+ 
 @app.route('/')
 def home():
     """Render the home page with tasks and monthly action items for the logged-in user."""
@@ -993,27 +1018,129 @@ def signup():
 
 @app.route('/reset-password', methods=['GET', 'POST'])
 def reset_password():
+    """
+    Handle password reset requests.
+    Sends an email with a reset link if the user exists.
+    """
     if request.method == 'POST':
-        email = request.form['email']
-        token = secrets.token_urlsafe(16)
-        expires_at = datetime.now() + timedelta(hours=1)
+        email = request.form.get('email')
+        
+        if not email:
+            return jsonify(success=False, message="Email address is required."), 400
 
-        with get_db_connection() as conn:
-            cursor = conn.cursor()
-            cursor.execute('''SELECT id FROM users WHERE email = ?''', (email,))
-            user = cursor.fetchone()
+        token = secrets.token_urlsafe(16)  # Generate a secure token
+        expires_at = datetime.now() + timedelta(hours=1)  # Set token expiration time
 
-            if user:
-                cursor.execute('''INSERT INTO password_reset_tokens (user_id, token, expires_at) VALUES (?, ?, ?)''',
-                               (user['id'], token, expires_at))
-                conn.commit()
-                # Replace with actual email sending logic
-                print(f"Password reset link: {url_for('reset_password_confirm', token=token, _external=True)}")
-                return jsonify(success=True)
-            else:
-                return jsonify(success=False, message='Email not found.')
+        try:
+            with get_db_connection() as conn:
+                cursor = conn.cursor()
+                # Check if the user exists
+                cursor.execute('SELECT id FROM users WHERE email = ?', (email,))
+                user = cursor.fetchone()
+
+                if user:
+                    # Insert the reset token into the database
+                    cursor.execute(
+                        '''INSERT INTO password_reset_tokens (user_id, token, expires_at) VALUES (?, ?, ?)''',
+                        (user['id'], token, expires_at)
+                    )
+                    conn.commit()
+
+                    # Generate the reset link
+                    reset_link = url_for('reset_password_confirm', token=token, _external=True)
+
+                    # Send the password reset email
+                    body = f"Click the following link to reset your password: {reset_link}"
+                    email_notifier.send_password_reset_email(email, "Password Reset", body)
+                    
+                    print(f"Password reset link: {reset_link}")  # For debugging purposes
+                    return jsonify(success=True, message="Password reset link has been sent to your email.")
+
+                else:
+                    return jsonify(success=False, message="Email not found."), 404
+
+        except sqlite3.Error as db_error:
+            print(f"Database error: {db_error}")
+            return jsonify(success=False, message="An internal error occurred. Please try again later."), 500
+
+        except Exception as e:
+            print(f"Unexpected error: {e}")
+            return jsonify(success=False, message="An unexpected error occurred. Please try again later."), 500
+
+    # Render the password reset form for GET requests
     return render_template('reset_password.html')
 
+
+@app.route('/reset-password/<token>', methods=['GET', 'POST'])
+def reset_password_confirm(token):
+    """
+    Handle password reset via a unique token.
+    """
+    if request.method == 'GET':
+        try:
+            # Validate the token
+            with get_db_connection() as conn:
+                cursor = conn.cursor()
+                cursor.execute(
+                    '''SELECT * FROM password_reset_tokens WHERE token = ? AND expires_at > ? AND used = 0''',
+                    (token, datetime.now())
+                )
+                token_record = cursor.fetchone()
+
+                if token_record:
+                    # Render the password reset form
+                    return render_template('reset_password_confirm.html', token=token)
+                else:
+                    return "Invalid or expired token.", 400
+
+        except sqlite3.Error as e:
+            print(f"Database error: {e}")
+            return "An internal error occurred. Please try again later.", 500
+
+    elif request.method == 'POST':
+        # Process the new password submission
+        new_password = request.form.get('new_password')
+        confirm_password = request.form.get('confirm_new_password')
+
+        # Validate the new password
+        if not new_password or not confirm_password:
+            return jsonify(success=False, message="Password fields cannot be empty."), 400
+
+        if new_password != confirm_password:
+            return jsonify(success=False, message="Passwords do not match."), 400
+
+        if len(new_password) < 8 or not re.search(r'[A-Za-z]', new_password) or not re.search(r'[0-9]', new_password):
+            return jsonify(success=False, message="Password must be at least 8 characters long and include both letters and numbers."), 400
+
+        try:
+            with get_db_connection() as conn:
+                cursor = conn.cursor()
+                cursor.execute(
+                    '''SELECT * FROM password_reset_tokens WHERE token = ? AND expires_at > ? AND used = 0''',
+                    (token, datetime.now())
+                )
+                token_record = cursor.fetchone()
+
+                if token_record:
+                    # Update the user's password
+                    password_hash = bcrypt.hashpw(new_password.encode('utf-8'), bcrypt.gensalt())
+                    cursor.execute(
+                        '''UPDATE users SET password_hash = ? WHERE id = ?''',
+                        (password_hash, token_record['user_id'])
+                    )
+                    # Mark the token as used
+                    cursor.execute('UPDATE password_reset_tokens SET used = 1 WHERE id = ?', (token_record['id'],))
+                    conn.commit()
+
+                    return jsonify(success=True, message="Password updated successfully.")
+                else:
+                    return jsonify(success=False, message="Invalid or expired token."), 400
+
+        except sqlite3.Error as e:
+            print(f"Database error: {e}")
+            return jsonify(success=False, message="An internal error occurred. Please try again later."), 500
+
+    
 @app.route('/api/users', methods=['GET', 'POST'])
 def manage_users():
     if request.method == 'GET':
@@ -1096,27 +1223,13 @@ def logout():
 def user_management():
     return render_template('user_management.html')
 
-@app.route('/reset-password/<token>', methods=['GET', 'POST'])
-def reset_password_confirm(token):
-    if request.method == 'POST':
-        new_password = request.form['new_password']
-        with get_db_connection() as conn:
-            cursor = conn.cursor()
-            cursor.execute('''SELECT * FROM password_reset_tokens WHERE token = ? AND expires_at > ? AND used = 0''',
-                           (token, datetime.now()))
-            token_record = cursor.fetchone()
 
-            if token_record:
-                password_hash = bcrypt.hashpw(new_password.encode('utf-8'), bcrypt.gensalt())
-                cursor.execute('''UPDATE users SET password_hash = ? WHERE id = ?''',
-                               (password_hash, token_record['user_id']))
-                cursor.execute('''UPDATE password_reset_tokens SET used = 1 WHERE id = ?''', (token_record['id'],))
-                conn.commit()
-                return jsonify(success=True, message='Password updated successfully.', redirect=url_for('login'))
-            else:
-                return jsonify(success=False, message='Invalid or expired token.')
-    return render_template('reset_password_confirm.html')
 
 if __name__ == '__main__':
-    init_db()
-    app.run(host="0.0.0.0", port=8181, threaded=True, use_reloader=False)
+    try:
+        init_db()
+        app.run(host="0.0.0.0", port=8181, threaded=True, use_reloader=False)
+    finally:
+        # Ensure the scheduler shuts down when the app stops
+        scheduler.shutdown()
+    
