@@ -525,6 +525,7 @@ def monthly_progress_data():
     """Provide monthly progress data for the logged-in user."""
     if 'user_id' not in session:
         return jsonify({"success": False, "error": "Unauthorized access."}), 401
+    
     user_id = session['user_id']
     start_date = request.args.get('start_date')
     end_date = request.args.get('end_date')
@@ -533,22 +534,33 @@ def monthly_progress_data():
         with sqlite3.connect(DATABASE) as conn:
             cursor = conn.cursor()
             
-            # Add user filter
+            # Base queries with user filter
             task_base_query = "FROM tasks WHERE user_id = ?"
             action_base_query = "FROM monthly_action_items WHERE user_id = ?"
             params = [user_id]
 
             # Date range filtering
             if start_date and end_date:
-                task_base_query += f" AND (due_date BETWEEN '{start_date}' AND '{end_date}')"
-                action_base_query += f" AND (due_date BETWEEN '{start_date}' AND '{end_date}')"         
+                # Validate date range
+                try:
+                    start = datetime.strptime(start_date, '%Y-%m-%d').date()
+                    end = datetime.strptime(end_date, '%Y-%m-%d').date()
+                    if start > end:
+                        return jsonify({"error": "Invalid date range"}), 400
+                    
+                    task_base_query += " AND (due_date BETWEEN ? AND ?)"
+                    action_base_query += " AND (due_date BETWEEN ? AND ?)"
+                    params.extend([start_date, end_date])
+                except ValueError:
+                    return jsonify({"error": "Invalid date format"}), 400
+
             # 1. Priority vs Completion Percentage
             cursor.execute(f"""
                 SELECT priority, 
                        AVG(percentage_completion) AS avg_completion 
                 {task_base_query}
                 GROUP BY priority
-            """)
+            """, params)
             priority_completion_data = cursor.fetchall()
 
             # 2. Monthly Progress for Tasks
@@ -560,7 +572,7 @@ def monthly_progress_data():
                 {task_base_query}
                 GROUP BY month
                 ORDER BY month
-            """)
+            """, params)
             monthly_task_progress = cursor.fetchall()
             
             # 3. Monthly Progress for Action Items
@@ -572,7 +584,7 @@ def monthly_progress_data():
                 {action_base_query}
                 GROUP BY month
                 ORDER BY month
-            """)
+            """, params)
             monthly_action_progress = cursor.fetchall()
             
             # 4. Action Item Status Breakdown
@@ -580,7 +592,7 @@ def monthly_progress_data():
                 SELECT status, COUNT(*) AS count
                 {action_base_query}
                 GROUP BY status
-            """)
+            """, params)
             action_status_data = cursor.fetchall()
             status_breakdown = {row[0]: row[1] for row in action_status_data}
 
@@ -589,7 +601,7 @@ def monthly_progress_data():
                 SELECT priority, COUNT(*) AS total_tasks
                 {task_base_query}
                 GROUP BY priority
-            """)
+            """, params)
             total_tasks_by_priority = dict(cursor.fetchall())
 
             # 6. Task Completion Timeline (optional new chart)
@@ -599,7 +611,7 @@ def monthly_progress_data():
                 {task_base_query}
                 GROUP BY date
                 ORDER BY date
-            """)
+            """, params)
             task_completion_timeline = cursor.fetchall()
 
             return jsonify({
@@ -626,7 +638,6 @@ def monthly_progress_data():
     except sqlite3.Error as e:
         print(f"Database error: {e}")
         return jsonify({"error": "Failed to fetch progress data."}), 500
-
 @app.route('/upload_monthly_actions', methods=['POST'])
 def upload_monthly_actions():
     """Upload and process monthly action items for the logged-in user."""
@@ -710,18 +721,32 @@ def task_data():
     end_date = request.args.get('end_date')
 
     try:
+        # Validate date range if both dates are provided
+        if start_date and end_date:
+            try:
+                start = datetime.strptime(start_date, '%Y-%m-%d').date()
+                end = datetime.strptime(end_date, '%Y-%m-%d').date()
+                
+                # Ensure start date is not after end date
+                if start > end:
+                    return jsonify({"error": "Invalid date range: Start date must be before or equal to end date"}), 400
+            except ValueError:
+                return jsonify({"error": "Invalid date format. Use YYYY-MM-DD"}), 400
+
         with sqlite3.connect(DATABASE) as conn:
             cursor = conn.cursor()
 
             # Base query
             query = '''
-                SELECT 
-                    description AS name, 
-                    priority, 
-                    percentage_completion AS progress, 
-                    due_date 
-                FROM tasks
-                WHERE user_id = ? AND status IN ('Open', 'In Progress', 'Completed')
+            SELECT
+                id,
+                description AS name,
+                priority,
+                percentage_completion AS progress,
+                due_date,
+                status
+            FROM tasks
+            WHERE user_id = ? AND status IN ('Open', 'In Progress', 'Completed')
             '''
             params = [user_id]
 
@@ -730,27 +755,44 @@ def task_data():
                 query += ' AND due_date BETWEEN ? AND ?'
                 params.extend([start_date, end_date])
 
+            # Order tasks by priority and progress
+            query += ' ORDER BY priority, percentage_completion DESC'
+
             cursor.execute(query, params)
             tasks = cursor.fetchall()
 
-        # Structure the data as JSON
-        task_data = {
-            "tasks": [
-                {
-                    "name": task[0],
-                    "priority": task[1],
-                    "progress": task[2],
-                    "due_date": task[3] if task[3] else "No due date"
+            # Structure the data as JSON
+            task_data = {
+                "tasks": [
+                    {
+                        "id": task[0],
+                        "name": task[1] or "Unnamed Task",
+                        "priority": task[2] or "Medium",
+                        "progress": task[3] or 0,
+                        "due_date": task[4] or "No due date",
+                        "status": task[5]
+                    }
+                    for task in tasks
+                ],
+                "summary": {
+                    "total_tasks": len(tasks),
+                    "priorities": {
+                        "High": sum(1 for task in tasks if task[2] == "High"),
+                        "Medium": sum(1 for task in tasks if task[2] == "Medium"),
+                        "Low": sum(1 for task in tasks if task[2] == "Low")
+                    },
+                    "avg_progress": round(sum(task[3] or 0 for task in tasks) / len(tasks), 2) if tasks else 0
                 }
-                for task in tasks
-            ],
-        }
+            }
 
-        return jsonify(task_data)
+            return jsonify(task_data)
+
     except sqlite3.Error as e:
         print(f"Database error: {e}")
-        return jsonify({"error": "Failed to fetch task data."}), 500
- 
+        return jsonify({"error": "Failed to fetch task data.", "details": str(e)}), 500
+    except Exception as e:
+        print(f"Unexpected error: {e}")
+        return jsonify({"error": "An unexpected error occurred.", "details": str(e)}), 500
 # Add new routes for email management
 @app.route('/manage-emails', methods=['GET', 'POST'])
 def manage_emails():
