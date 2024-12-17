@@ -71,6 +71,7 @@
     overflow-wrap: break-word;
 }
 </style>
+
 <script>
     document.addEventListener("DOMContentLoaded", () => {
         const dateRangeForm = document.getElementById('dateRangeForm');
@@ -79,9 +80,16 @@
         const endDateInput = document.getElementById('endDate');
 
         // Set max date to today
-        const today = new Date().toISOString().split('T')[0];
-        startDateInput.max = today;
-        endDateInput.max = today;
+        const today = new Date();
+        const todayString = today.toISOString().split('T')[0];  // Format as YYYY-MM-DD
+        endDateInput.max = todayString;
+
+        // Set start date to one month before today
+        const oneMonthAgo = new Date(today);
+        oneMonthAgo.setMonth(today.getMonth() - 1);  // Go back one month
+        const startDateString = oneMonthAgo.toISOString().split('T')[0];  // Format as YYYY-MM-DD
+        startDateInput.value = startDateString;
+        endDateInput.value = todayString;
 
         // Fetch and render charts
         async function fetchChartData(startDate = null, endDate = null) {
@@ -162,67 +170,68 @@
                 // Enhanced Due Date Progress Bars
                 const progressBars = document.getElementById('progressBars');
                 progressBars.innerHTML = '';
-                data.tasks			
-					.forEach(task => {
-				                    const barContainer = document.createElement('div');
-				                    barContainer.style.margin = '15px 0';
-				                    barContainer.style.display = 'flex';
-				                    barContainer.style.alignItems = 'center';
+                data.tasks.forEach(task => {
+                    const barContainer = document.createElement('div');
+                    barContainer.style.margin = '15px 0';
+                    barContainer.style.display = 'flex';
+                    barContainer.style.alignItems = 'center';
 
-				                    const label = document.createElement('div');
-				                    label.style.width = '30%';
-				                    label.style.fontWeight = 'bold';
-				                    label.innerHTML = `
-				                        <span>${task.name}</span><br>
-				                        <small style="color: #666;">${task.due_date || 'No Due Date'}</small>
-				                    `;
-				                    barContainer.appendChild(label);
+                    const label = document.createElement('div');
+                    label.style.width = '30%';
+                    label.style.fontWeight = 'bold';
+                    label.innerHTML = `
+                        <span>${task.name}</span><br>
+                        <small style="color: #666;">${task.due_date || 'No Due Date'}</small>
+                    `;
+                    barContainer.appendChild(label);
 
-				                    const progressBar = document.createElement('div');
-				                    progressBar.style.width = '70%';
-				                    progressBar.style.backgroundColor = '#eee';
-				                    progressBar.style.borderRadius = '5px';
-				                    progressBar.style.position = 'relative';
-				                    progressBar.style.height = '20px'; /* Reduced height for a slimmer look */
+                    const progressBar = document.createElement('div');
+                    progressBar.style.width = '70%';
+                    progressBar.style.backgroundColor = '#eee';
+                    progressBar.style.borderRadius = '5px';
+                    progressBar.style.position = 'relative';
+                    progressBar.style.height = '20px'; /* Reduced height for a slimmer look */
 
-				                    const progress = document.createElement('div');
-				                    progress.style.width = `${task.progress}%`;
-				                    progress.style.height = '100%';
-									let color;
-									if (task.progress > 90) {
-									    color = 'linear-gradient(to right, #228B22, #006400)'; // Dark Green to Green
-									} else if (task.progress > 75) {
-									    color = 'linear-gradient(to right, #32CD32 , #228B22)'; // Light Green to Green
-									} else if (task.progress > 60) {
-									    color = 'linear-gradient(to right, #ADFF2F, #32CD32)'; // Yellow Green to Light Green
-									} else if (task.progress > 45) {
-									    color = 'linear-gradient(to right, #FFFF00, #ADFF2F)'; // Yellow to Yellow Green
-									} else if (task.progress > 30) {
-									    color = 'linear-gradient(to right, #FFA500, #FFFF00)'; // Orange to Yellow
-									} else {
-									    color = 'linear-gradient(to right, #FF0000,  #FFFF00)'; // Red to Orange
-									}
-									progress.style.background = color;
+                    const progress = document.createElement('div');
+                    progress.style.width = `${task.progress}%`;
+                    progress.style.height = '100%';
+                    let color;
+                    if (task.progress > 90) {
+                        color = 'linear-gradient(to right, #228B22, #006400)'; // Dark Green to Green
+                    } else if (task.progress > 75) {
+                        color = 'linear-gradient(to right, #32CD32 , #228B22)'; // Light Green to Green
+                    } else if (task.progress > 60) {
+                        color = 'linear-gradient(to right, #ADFF2F, #32CD32)'; // Yellow Green to Light Green
+                    } else if (task.progress > 45) {
+                        color = 'linear-gradient(to right, #FFFF00, #ADFF2F)'; // Yellow to Yellow Green
+                    } else if (task.progress > 30) {
+                        color = 'linear-gradient(to right, #FFA500, #FFFF00)'; // Orange to Yellow
+                    } else {
+                        color = 'linear-gradient(to right, #FF0000,  #FFFF00)'; // Red to Orange
+                    }
+                    progress.style.background = color;
 
+                    progress.style.borderRadius = '5px';
+                    progress.style.transition = 'width 0.5s ease-in-out';
 
-				                    progress.style.borderRadius = '5px';
-				                    progress.style.transition = 'width 0.5s ease-in-out';
+                    progress.style.borderRadius = '5px';
+                    progress.style.transition = 'width 0.5s ease-in-out';
 
-				                    const progressText = document.createElement('span');
-				                    progressText.textContent = `${task.progress}%`;
-				                    progressText.style.position = 'absolute';
-				                    progressText.style.right = '5px';
-				                    progressText.style.top = '50%';
-				                    progressText.style.transform = 'translateY(-50%)';
-				                    progressText.style.color = 'white';
-				                    progressText.style.fontWeight = 'bold';
+                    const progressText = document.createElement('span');
+                    progressText.textContent = `${task.progress}%`;
+                    progressText.style.position = 'absolute';
+                    progressText.style.right = '5px';
+                    progressText.style.top = '50%';
+                    progressText.style.transform = 'translateY(-50%)';
+                    progressText.style.color = 'white';
+                    progressText.style.fontWeight = 'bold';
 
-				                    progressBar.appendChild(progress);
-				                    progressBar.appendChild(progressText);
-				                    barContainer.appendChild(progressBar);
+                    progressBar.appendChild(progress);
+                    progressBar.appendChild(progressText);
+                    barContainer.appendChild(progressBar);
 
-				                    progressBars.appendChild(barContainer);
-				                });
+                    progressBars.appendChild(barContainer);
+                });
             } catch (error) {
                 console.error('Error fetching chart data:', error);
             }
@@ -250,9 +259,9 @@
 
         // Reset button handler
         resetButton.addEventListener('click', () => {
-            startDateInput.value = '';
-            endDateInput.value = '';
-            fetchChartData();
+            startDateInput.value = startDateString;  // Set default start date to one month ago
+            endDateInput.value = todayString;  // Set default end date to today
+            fetchChartData();  // Fetch default data
         });
     });
 </script>
