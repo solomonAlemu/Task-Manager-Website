@@ -39,8 +39,9 @@
     </section>
 
     <section>
-        <h3>Fetch Historical Monthly Action Items</h3>
+
         <form id="fetchForm" class="fetch-form" style="display: none;">
+			<h3>Fetch Historical Monthly Action Items</h3>
             <select name="status" id="status">
                 <option value="">All</option>
                 <option value="Open">Open</option>
@@ -54,9 +55,10 @@
         <div id="actionResults"></div> <!-- Container to display fetched action results -->
     </section>
     <section>
-        <h3>Upload Monthly Actions</h3>
+        
         <form id="uploadForm" action="{{ url_for('upload_monthly_actions') }}" method="post" enctype="multipart/form-data" style="display: none;">
-            <div class="form-group">
+			<h3>Upload Monthly Actions</h3>
+			<div class="form-group">
                 <label for="file">Select File (CSV or Excel):</label>
                 <input type="file" name="file" id="file" accept=".csv, .xls, .xlsx" required>
             </div>
@@ -65,7 +67,7 @@
     </section>
 
     <section>
-        <h2>Current Monthly Action Items</h2>
+        <h3>Current Monthly Action Items</h3>
         {% if monthly_actions %}
         <table class="action-list">
             <thead>

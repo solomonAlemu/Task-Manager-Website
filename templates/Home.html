@@ -8,7 +8,7 @@
 	<!-- Add Action Button -->
 	<section class="task-actions">
 
-	    <h3>Add New Tasks</h3>
+	    <h2>Manage Tasks</h2>
 	    <button id="showFormButton" type="button" class="show-btn">Add Task</button>
 	    <!-- Export Button -->
 	    <button id="exportButton" type="button" class="export-btn">Export Tasks</button>
@@ -65,8 +65,9 @@
 
     <!-- Search Form for Fetching Tasks -->
     <section class="task-search">
-        <h3>Fetch Historical Tasks</h3>
+      
         <form id="fetchForm" class="add-task-form" style="display: none;">
+			<h3>Fetch Historical Tasks</h3>
             <select name="status" id="status">
                 <option value="">All</option>
                 <option value="Open">Open</option>
@@ -82,7 +83,7 @@
 
     <!-- Daily Task List -->
     <section class="task-list">
-        <h2>Daily Task List</h2>
+        <h3>Daily Task List</h3>
         {% if tasks %}
         <table class="table table-striped">
             <thead>
