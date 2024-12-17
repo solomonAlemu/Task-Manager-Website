@@ -819,18 +819,22 @@ def manage_emails():
 
 @app.route('/send-task-email', methods=['POST'])
 def send_task_email():
-    """Send email notification for a specific task."""
-    task_id = request.form.get('task_id')
-    recipients = json.loads(request.form.get('recipients', '[]'))  # Parse JSON array of recipients
-    intent = request.form.get('intent')  # Get the intent parameter
-
-    if not task_id or not recipients or not intent:
-        return jsonify({
-            "success": False,
-            "message": "Invalid input: task_id, recipients, and intent are required."
-        }), 400
-
+    """
+    Send an email notification for a specific task.
+    """
     try:
+        # Retrieve and validate inputs
+        task_id = request.form.get('task_id')
+        recipients = json.loads(request.form.get('recipients', '[]'))
+        intent = request.form.get('intent')
+
+        if not task_id or not recipients or not intent:
+            return jsonify({
+                "success": False,
+                "message": "Invalid input: task_id, recipients, and intent are required."
+            }), 400
+
+        # Fetch task details from the database
         with sqlite3.connect(DATABASE) as conn:
             cursor = conn.cursor()
             cursor.execute("""
@@ -841,39 +845,125 @@ def send_task_email():
             """, (task_id,))
             task = cursor.fetchone()
 
-        if task:
-            task_details = {
-                "description": task[0],
-                "priority": task[1],
-                "status": task[2],
-                "assigned_person": task[3],
-                "due_date": task[4],
-                "percentage_completion": task[5]
-            }
+        if not task:
+            return jsonify({"success": False, "message": "Task not found"}), 404
 
-            # Pass intent to the email notifier
-            result = email_notifier.send_task_notification(recipients, task_details, intent)
-            
-            return jsonify({
-                "success": result, 
-                "message": "Emails sent successfully" if result else "Failed to send emails"
-            })
-        
-        return jsonify({"success": False, "message": "Task not found"}), 404
+        task_details = {
+            "description": task[0],
+            "priority": task[1],
+            "status": task[2],
+            "assigned_person": task[3],
+            "due_date": task[4],
+            "percentage_completion": task[5]
+        }
+
+        # Send email notifications
+        result = email_notifier.send_task_notification(recipients, task_details, intent)
+
+        return jsonify({
+            "success": result,
+            "message": "Emails sent successfully" if result else "Failed to send emails"
+        })
+
+    except sqlite3.Error as db_error:
+        print(f"Database error in /send-task-email: {db_error}")
+        return jsonify({"success": False, "message": "Database error occurred."}), 500
 
     except Exception as e:
-        print(f"Error in /send-task-email: {e}")
+        print(f"Unexpected error in /send-task-email: {e}")
         return jsonify({"success": False, "message": str(e)}), 500
+
 
 
 @app.route('/get-emails', methods=['GET'])
 def get_emails():
+    """
+    Retrieve the list of users for email selection.
+    """
     try:
         with open('email_config.json', 'r') as f:
-            data = json.load(f)
-        return jsonify(data.get('users', []))
+            email_data = json.load(f)
+
+        users = email_data.get('users', [])
+        if not users:
+            return jsonify({"success": False, "message": "No users found in the email configuration."}), 404
+
+        return jsonify({"success": True, "users": users})
+
+    except FileNotFoundError:
+        return jsonify({
+            "success": False,
+            "message": "Email configuration file not found."
+        }), 404
+
+    except json.JSONDecodeError as json_error:
+        print(f"JSON error in /get-emails: {json_error}")
+        return jsonify({
+            "success": False,
+            "message": "Error decoding email configuration file."
+        }), 500
+
     except Exception as e:
-        return jsonify({"error": "Failed to load email data", "details": str(e)})
+        print(f"Unexpected error in /get-emails: {e}")
+        return jsonify({
+            "success": False,
+            "message": "An unexpected error occurred.",
+            "details": str(e)
+        }), 500
+
+@app.route('/search-emails', methods=['GET'])
+def search_emails():
+    """
+    Search for email users based on a keyword.
+    """
+    keyword = request.args.get('keyword', '').strip().lower()  # Retrieve and sanitize keyword
+
+    if not keyword:
+        return jsonify({
+            "success": False,
+            "message": "Keyword is required for searching."
+        }), 400
+
+    try:
+        # Load email data from the configuration file
+        with open('email_config.json', 'r') as f:
+            email_data = json.load(f)
+        
+        users = email_data.get('users', [])
+        if not users:
+            return jsonify({"success": False, "message": "No users found in the email configuration."}), 404
+
+        # Filter users by keyword (match name or email)
+        filtered_users = [
+            user for user in users
+            if keyword in user['name'].lower() or keyword in user['email'].lower()
+        ]
+
+        return jsonify({
+            "success": True,
+            "users": filtered_users
+        })
+
+    except FileNotFoundError:
+        return jsonify({
+            "success": False,
+            "message": "Email configuration file not found."
+        }), 404
+
+    except json.JSONDecodeError as json_error:
+        print(f"JSON error in /search-emails: {json_error}")
+        return jsonify({
+            "success": False,
+            "message": "Error decoding email configuration file."
+        }), 500
+
+    except Exception as e:
+        print(f"Unexpected error in /search-emails: {e}")
+        return jsonify({
+            "success": False,
+            "message": "An unexpected error occurred.",
+            "details": str(e)
+        }), 500
 
 @app.route('/email-management')
 def email_management():

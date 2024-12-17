@@ -169,22 +169,21 @@
 		    <td class="updates" >{{ task[7] }}</tdclass="email-recipient-list form-control">
                     <!-- Email Notification Column -->
 					<td>
-						<select id="emailSelect_{{ task[0] }}" class="email-recipient-list form-control" multiple>
-					        <option value="">Select Recipient</option>
-					    </select>
+						<input type="text" id="emailSearch_{{ task[0] }}" 
+						       class="email-search-input form-control" 
+						       placeholder="Search recipient by keyword" 
+						       oninput="searchEmailRecipients({{ task[0] }}, this.value)">
+						<ul id="emailResults_{{ task[0] }}" class="email-results-list"></ul>
+						<div id="selectedEmails_{{ task[0] }}" class="selected-emails-container"></div>
+
 						<select id="emailIntent_{{ task[0] }}" class="email-intent-list form-control">
 						    <option value="Assignment">Assignment</option>
 						    <option value="Status request">Status request</option>
 						    <option value="Reminder">Reminder</option>
 						    <option value="Notification" selected>Notification</option>
 						</select>
+						<button onclick="sendTaskEmail({{ task[0] }})" class="btn-sendTaskEmail">Send</button>
 
-					    <button 
-					        onclick="sendTaskEmail({{ task[0] }})" 
-					        class="btn-sendTaskEmail"
-					    >
-					        Send
-					    </button>
 					</td>
                 </tr>
                 {% endfor %}
@@ -279,18 +278,29 @@
         this.style.display = "none"; // Hide the "Add Action" button
     });
 	function sendTaskEmail(taskId) {
-	    const emailSelect = document.getElementById(`emailSelect_${taskId}`);
-	    const intentSelect = document.getElementById(`emailIntent_${taskId}`);
-	    const selectedOptions = Array.from(emailSelect.selectedOptions);
-	    const recipients = selectedOptions.map(option => {
-	        const [name, email] = option.text.split(' (');
-	        return { name: name.trim(), email: email.replace(')', '').trim() };
-	    });
-	    const emailIntent = intentSelect.value;
-	    if (recipients.length === 0) {
+	    // Get the container of selected emails
+	    const selectedEmailsContainer = document.getElementById(`selectedEmails_${taskId}`);
+	    if (!selectedEmailsContainer || selectedEmailsContainer.children.length === 0) {
 	        alert('Please select at least one email recipient');
 	        return;
 	    }
+
+	    // Extract selected email details
+	    const recipients = Array.from(selectedEmailsContainer.children).map(emailDiv => {
+	        const email = emailDiv.dataset.email;
+	        const name = emailDiv.textContent.split(' (')[0].trim();
+	        return { name, email };
+	    });
+
+	    // Get the email intent
+	    const emailIntent = document.getElementById(`emailIntent_${taskId}`).value;
+
+	    if (!emailIntent) {
+	        alert('Please select an email intent');
+	        return;
+	    }
+
+	    // Send the email request to the server
 	    fetch('/send-task-email', {
 	        method: 'POST',
 	        headers: {
@@ -298,33 +308,78 @@
 	        },
 	        body: `task_id=${taskId}&recipients=${encodeURIComponent(JSON.stringify(recipients))}&intent=${encodeURIComponent(emailIntent)}`
 	    })
-	    .then(response => response.json())
-	    .then(data => {
-	        alert(data.message);
-	    })
-	    .catch(error => {
-	        console.error('Error sending email:', error);
-	        alert('An error occurred while sending the email');
-	    });
-	}
- 
-	function populateEmailDropdown(taskId) {
-	    fetch('/get-emails')
 	        .then(response => response.json())
 	        .then(data => {
-	            const emailSelect = document.getElementById(`emailSelect_${taskId}`);
-	            emailSelect.innerHTML = '<option value="">Select Recipient</option>'; // Clear existing options
-	            data.forEach(user => {
-	                const option = document.createElement('option');
-	                option.value = user.email;
-	                option.textContent = `${user.name} (${user.email})`;
-	                emailSelect.appendChild(option);
-	            });
+	            if (data.success) {
+	                alert('Emails sent successfully');
+	            } else {
+	                alert(`Failed to send emails: ${data.message}`);
+	            }
 	        })
 	        .catch(error => {
-	            console.error('Error fetching emails:', error);
+	            console.error('Error sending email:', error);
+	            alert('An error occurred while sending the email');
 	        });
 	}
+
+ 
+	function searchEmailRecipients(taskId, keyword) {
+	    if (keyword.length < 2) {
+	        document.getElementById(`emailResults_${taskId}`).innerHTML = ''; // Clear results for short queries
+	        return;
+	    }
+
+	    fetch(`/search-emails?keyword=${encodeURIComponent(keyword)}`)
+	        .then(response => response.json())
+	        .then(data => {
+	            const emailResults = document.getElementById(`emailResults_${taskId}`);
+	            emailResults.innerHTML = ''; // Clear previous results
+
+	            if (data.success && data.users.length > 0) {
+	                data.users.forEach(user => {
+	                    const listItem = document.createElement('li');
+	                    listItem.textContent = `${user.name} (${user.email})`;
+	                    listItem.className = 'email-result-item';
+	                    listItem.onclick = () => selectEmail(taskId, user);
+	                    emailResults.appendChild(listItem);
+	                });
+	            } else {
+	                emailResults.innerHTML = '<li class="email-result-item">No matches found</li>';
+	            }
+	        })
+	        .catch(error => {
+	            console.error('Error searching emails:', error);
+	        });
+	}
+
+
+	function selectEmail(taskId, user) {
+	    const emailResults = document.getElementById(`emailResults_${taskId}`);
+	    emailResults.innerHTML = ''; // Clear results once a selection is made
+
+	    const selectedEmailsContainer = document.getElementById(`selectedEmails_${taskId}`);
+	    if (!selectedEmailsContainer) {
+	        const container = document.createElement('div');
+	        container.id = `selectedEmails_${taskId}`;
+	        container.className = 'selected-emails-container';
+	        document.getElementById(`emailSearch_${taskId}`).after(container);
+	    }
+
+	    const selectedEmails = document.getElementById(`selectedEmails_${taskId}`);
+	    const emailDiv = document.createElement('div');
+	    emailDiv.textContent = `${user.name} (${user.email})`;
+	    emailDiv.className = 'selected-email';
+	    emailDiv.dataset.email = user.email;
+
+	    const removeBtn = document.createElement('button');
+	    removeBtn.textContent = 'x';
+	    removeBtn.onclick = () => emailDiv.remove();
+	    emailDiv.appendChild(removeBtn);
+
+	    selectedEmails.appendChild(emailDiv);
+	}
+
+
 	function displayTextWithNewLines(text, elementId) {
 	    // Replace newline characters with <br> tags
 	    const formattedText = text.replace(/\n/g, '<br>');

@@ -45,6 +45,15 @@ form input[type="text"], form input[type="number"], form select, form textarea {
     padding: 10px;
 }
 
+
+.email-search-input  {
+    display: block;
+    width: calc(100% - 20px); /* Match column widths by aligning with table cell padding */
+    padding: 10px;
+}
+
+
+
 form input[type="date"], form select, form textarea {
     display: block;
     width: 20%;
@@ -470,3 +479,27 @@ textarea {
     transform: scale(1.05); /* Slightly enlarge on hover */
 }
  
+.selected-emails-container {
+    margin-top: 8px;
+    display: flex;
+    flex-wrap: wrap;
+}
+
+.selected-email {
+    display: inline-flex;
+    align-items: center;
+    margin: 4px;
+    padding: 4px 8px;
+    background-color: #e6f7ff;
+    border: 1px solid #91d5ff;
+    border-radius: 4px;
+}
+
+.selected-email button {
+    margin-left: 8px;
+    background: transparent;
+    border: none;
+    color: red;
+    font-weight: bold;
+    cursor: pointer;
+}
