@@ -1198,6 +1198,49 @@ def delete_user(user_id):
     except sqlite3.Error as e:
         print(f"Database error: {e}")
         return jsonify({"error": "Unable to delete user."}), 500
+@app.route('/api/users/<int:user_id>', methods=['GET', 'PUT'])
+def user_info(user_id):
+    """Get and edit user info."""
+    if request.method == 'GET':
+        # Fetch the user info
+        conn = sqlite3.connect(DATABASE)
+        cursor = conn.cursor()
+        cursor.execute("SELECT id, username, email, role FROM users WHERE id = ?", (user_id,))
+        user = cursor.fetchone()
+        conn.close()
+
+        if user:
+            return jsonify({"success": True, "user": {
+                "id": user[0],
+                "username": user[1],
+                "email": user[2],
+                "role": user[3]
+            }})
+        else:
+            return jsonify({"success": False, "message": "User not found"}), 404
+
+    if request.method == 'PUT':
+        # Update the user info
+        username = request.form['username']
+        email = request.form['email']
+        role = request.form['role']
+
+        try:
+            conn = sqlite3.connect(DATABASE)
+            cursor = conn.cursor()
+            cursor.execute("""
+                UPDATE users
+                SET username = ?, email = ?, role = ?
+                WHERE id = ?
+            """, (username, email, role, user_id))
+            conn.commit()
+            conn.close()
+
+            return jsonify({"success": True, "message": "User info updated successfully"})
+
+        except sqlite3.Error as e:
+            print(f"Error updating user info: {e}")
+            return jsonify({"success": False, "message": "Failed to update user info"}), 500
 
 @app.route('/login', methods=['GET', 'POST'])
 def login():
