@@ -321,7 +321,7 @@ def export_tasks():
             query = """
                 SELECT 
                     id, assigned_person, description, priority, status, 
-                    percentage_completion, notes, updates, due_date, 
+                    percentage_completion, notes, updates, due_date, created_at,
                     (SELECT description FROM monthly_action_items WHERE id = tasks.monthly_action_id) AS monthly_action
                 FROM tasks
                 WHERE user_id = ?
@@ -330,8 +330,17 @@ def export_tasks():
 
             # Apply date range filtering if provided
             if start_date and end_date:
-                query += " AND due_date BETWEEN ? AND ?"
-                params.extend([start_date, end_date])
+                try:
+                    # Ensure dates are in the correct format
+                    start_date = f"{start_date} 00:00:00"  # Start at midnight
+                    end_date = f"{end_date} 23:59:59"      # End at the last second of the day
+                    
+                    # Add the date filter to the query
+                    query += " AND created_at BETWEEN ? AND ?"
+                    params.extend([start_date, end_date])
+                except ValueError:
+                    return jsonify({"error": "Invalid date format. Use YYYY-MM-DD"}), 400
+
 
             cursor.execute(query, params)
             tasks = cursor.fetchall()
@@ -340,14 +349,28 @@ def export_tasks():
         output = BytesIO()
         text_io = TextIOWrapper(output, encoding='utf-8', newline='')
         writer = csv.writer(text_io)
+        
         # Write header
         writer.writerow([
             "ID", "Assigned Person", "Description", "Priority", "Status",
-            "Completion (%)", "Notes", "Updates", "Due Date", "Monthly Action"
+            "Completion (%)", "Notes", "Updates", "Due Date", "Created At", "Monthly Action"
         ])
+
         # Write task data
         for task in tasks:
-            writer.writerow(task)
+            writer.writerow([
+                task[0],  # ID
+                task[1] if task[1] else "Not Assigned",  # Assigned Person
+                task[2],  # Description
+                task[3],  # Priority
+                task[4],  # Status
+                task[5],  # Completion (%)
+                task[6] if task[6] else "",  # Notes
+                task[7] if task[7] else "",  # Updates
+                task[8] if task[8] else "No Due Date",  # Due Date
+                task[9],  # Created At
+                task[10] if task[10] else "No linked action"  # Monthly Action
+            ])
 
         # Ensure all data is written to the buffer
         text_io.flush()
@@ -568,13 +591,13 @@ def monthly_progress_data():
             if start_date and end_date:
                 # Validate date range format
                 try:
-                    # Ensure the dates are in the correct format (YYYY-MM-DD)
-                    start = datetime.strptime(start_date, '%Y-%m-%d').date()
-                    end = datetime.strptime(end_date, '%Y-%m-%d').date()
-                    
-                    if start > end:
+                    # Validate and format the date range
+                    start_date = f"{start_date} 00:00:00"  # Include time for the start of the day
+                    end_date = f"{end_date} 23:59:59"    # Include time for the end of the day
+
+                    if start_date > end_date:
                         return jsonify({"error": "Invalid date range: Start date must be before or equal to end date"}), 400
-                    
+
                     # Add the date range filter to the queries using 'created_at'
                     task_base_query += " AND (created_at BETWEEN ? AND ?)"
                     action_base_query += " AND (created_at BETWEEN ? AND ?)"
@@ -642,6 +665,7 @@ def monthly_progress_data():
             """, params)
             task_completion_timeline = cursor.fetchall()
 
+            # Prepare JSON response
             return jsonify({
                 "priority_completion": {row[0]: row[1] for row in priority_completion_data},
                 "task_progress": {
@@ -666,7 +690,6 @@ def monthly_progress_data():
     except sqlite3.Error as e:
         print(f"Database error: {e}")
         return jsonify({"error": "Failed to fetch progress data."}), 500
-
     
 @app.route('/upload_monthly_actions', methods=['POST'])
 def upload_monthly_actions():
@@ -780,10 +803,18 @@ def task_data():
             '''
             params = [user_id]
 
-            # Add date filter if provided
             if start_date and end_date:
-                query += ' AND created_at BETWEEN ? AND ?'
-                params.extend([start_date, end_date])
+                try:
+                    # Ensure dates are in the correct format
+                    start_date = f"{start_date} 00:00:00"  # Start at midnight
+                    end_date = f"{end_date} 23:59:59"      # End at the last second of the day
+                    
+                    # Add the date filter to the query
+                    query += " AND created_at BETWEEN ? AND ?"
+                    params.extend([start_date, end_date])
+                except ValueError:
+                    return jsonify({"error": "Invalid date format. Use YYYY-MM-DD"}), 400
+
 
             # Order tasks by priority and progress
             query += ' ORDER BY priority, percentage_completion DESC'
