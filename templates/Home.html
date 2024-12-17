@@ -102,7 +102,7 @@
                 </tr>
             </thead>
             <tbody>
-                {% for task in tasks %}
+                 {% for task in tasks|sort(attribute='0', reverse=true) %}
                 <tr>
                     <td>{{ task[0] }}</td>
                     <td>{{ task[1] or "Not Assigned" }}</td>

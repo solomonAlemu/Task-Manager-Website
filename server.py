@@ -566,18 +566,21 @@ def monthly_progress_data():
 
             # Date range filtering
             if start_date and end_date:
-                # Validate date range
+                # Validate date range format
                 try:
+                    # Ensure the dates are in the correct format (YYYY-MM-DD)
                     start = datetime.strptime(start_date, '%Y-%m-%d').date()
                     end = datetime.strptime(end_date, '%Y-%m-%d').date()
-                    if start > end:
-                        return jsonify({"error": "Invalid date range"}), 400
                     
-                    task_base_query += " AND (due_date BETWEEN ? AND ?)"
-                    action_base_query += " AND (due_date BETWEEN ? AND ?)"
+                    if start > end:
+                        return jsonify({"error": "Invalid date range: Start date must be before or equal to end date"}), 400
+                    
+                    # Add the date range filter to the queries using 'created_at'
+                    task_base_query += " AND (created_at BETWEEN ? AND ?)"
+                    action_base_query += " AND (created_at BETWEEN ? AND ?)"
                     params.extend([start_date, end_date])
                 except ValueError:
-                    return jsonify({"error": "Invalid date format"}), 400
+                    return jsonify({"error": "Invalid date format. Please use YYYY-MM-DD format."}), 400
 
             # 1. Priority vs Completion Percentage
             cursor.execute(f"""
@@ -590,7 +593,7 @@ def monthly_progress_data():
 
             # 2. Monthly Progress for Tasks
             cursor.execute(f"""
-                SELECT strftime('%Y-%m', due_date) AS month,
+                SELECT strftime('%Y-%m', created_at) AS month,
                        SUM(CASE WHEN status = 'Completed' THEN 1 ELSE 0 END) AS completed,
                        SUM(CASE WHEN status = 'In Progress' THEN 1 ELSE 0 END) AS in_progress,
                        SUM(CASE WHEN status = 'Open' THEN 1 ELSE 0 END) AS open
@@ -602,7 +605,7 @@ def monthly_progress_data():
             
             # 3. Monthly Progress for Action Items
             cursor.execute(f"""
-                SELECT strftime('%Y-%m', due_date) AS month,
+                SELECT strftime('%Y-%m', created_at) AS month,
                        SUM(CASE WHEN status = 'Completed' THEN 1 ELSE 0 END) AS completed,
                        SUM(CASE WHEN status = 'In Progress' THEN 1 ELSE 0 END) AS in_progress,
                        SUM(CASE WHEN status = 'Open' THEN 1 ELSE 0 END) AS open
@@ -621,7 +624,7 @@ def monthly_progress_data():
             action_status_data = cursor.fetchall()
             status_breakdown = {row[0]: row[1] for row in action_status_data}
 
-            # 5. Total Tasks by Priority (optional new chart)
+            # 5. Total Tasks by Priority
             cursor.execute(f"""
                 SELECT priority, COUNT(*) AS total_tasks
                 {task_base_query}
@@ -629,9 +632,9 @@ def monthly_progress_data():
             """, params)
             total_tasks_by_priority = dict(cursor.fetchall())
 
-            # 6. Task Completion Timeline (optional new chart)
+            # 6. Task Completion Timeline
             cursor.execute(f"""
-                SELECT strftime('%Y-%m-%d', due_date) AS date,
+                SELECT strftime('%Y-%m-%d', created_at) AS date,
                        COUNT(CASE WHEN status = 'Completed' THEN 1 END) AS completed_tasks
                 {task_base_query}
                 GROUP BY date
@@ -663,6 +666,8 @@ def monthly_progress_data():
     except sqlite3.Error as e:
         print(f"Database error: {e}")
         return jsonify({"error": "Failed to fetch progress data."}), 500
+
+    
 @app.route('/upload_monthly_actions', methods=['POST'])
 def upload_monthly_actions():
     """Upload and process monthly action items for the logged-in user."""
@@ -768,7 +773,7 @@ def task_data():
                 description AS name,
                 priority,
                 percentage_completion AS progress,
-                due_date,
+                created_at,
                 status
             FROM tasks
             WHERE user_id = ? AND status IN ('Open', 'In Progress', 'Completed')
@@ -777,7 +782,7 @@ def task_data():
 
             # Add date filter if provided
             if start_date and end_date:
-                query += ' AND due_date BETWEEN ? AND ?'
+                query += ' AND created_at BETWEEN ? AND ?'
                 params.extend([start_date, end_date])
 
             # Order tasks by priority and progress
@@ -794,7 +799,7 @@ def task_data():
                         "name": task[1] or "Unnamed Task",
                         "priority": task[2] or "Medium",
                         "progress": task[3] or 0,
-                        "due_date": task[4] or "No due date",
+                        "created_at": task[4] or "No creation date",
                         "status": task[5]
                     }
                     for task in tasks
@@ -818,6 +823,8 @@ def task_data():
     except Exception as e:
         print(f"Unexpected error: {e}")
         return jsonify({"error": "An unexpected error occurred.", "details": str(e)}), 500
+
+
 # Add new routes for email management
 @app.route('/manage-emails', methods=['GET', 'POST'])
 def manage_emails():
