@@ -16,12 +16,10 @@
 	    <!-- Date Range Form (Initially Hidden) -->
 	    <form id="dateRangeForm" action="{{ url_for('export_tasks') }}" method="GET" style="display: none; margin-top: 20px;">
 	        <div>
-	            <label for="start_date">Start Date:</label>
-	            <input type="date" id="start_date" name="start_date">
-	        </div>
-	        <div>
-	            <label for="end_date">End Date:</label>
-	            <input type="date" id="end_date" name="end_date">
+				<label for="start_date">Start Date:</label>
+				<input type="date" id="start_date" name="start_date">
+				<label for="end_date">End Date:</label>
+				<input type="date" id="end_date" name="end_date">
 	        </div>
 	        <button type="submit" class="export-btn">Download CSV</button>
 	    </form>
@@ -65,19 +63,27 @@
 
     <!-- Search Form for Fetching Tasks -->
     <section class="task-search">
-      
-        <form id="fetchForm" class="add-task-form" style="display: none;">
-			<h3>Fetch Historical Tasks</h3>
-            <select name="status" id="status">
-                <option value="">All</option>
-                <option value="Open">Open</option>
-                <option value="In Progress">In Progress</option>
-                <option value="Completed">Completed</option>
-                <option value="Cancelled">Cancelled</option>
-            </select>
-            <input type="text" id="keyword" name="keyword" placeholder="Search keyword">
-            <button type="button" id="fetchButton" class="btn btn-fetch">Fetch Tasks</button>
-        </form>
+		<!-- Task Search Section -->
+		<form id="fetchForm" class="add-task-form" style="display: none;">
+		    <h3>Fetch Historical Tasks</h3>
+		    <select name="status" id="fetch_status">
+		        <option value="">All</option>
+		        <option value="Open">Open</option>
+		        <option value="In Progress">In Progress</option>
+		        <option value="Completed">Completed</option>
+		        <option value="Cancelled">Cancelled</option>
+		    </select>
+		    <input type="text" id="fetch_keyword" name="keyword" placeholder="Search by keyword or monthly action description">
+		    <div>
+		        <label for="fetch_start_date">Start Date:</label>
+		        <input type="date" id="fetch_start_date" name="start_date">
+		    </div>
+		    <div>
+		        <label for="fetch_end_date">End Date:</label>
+		        <input type="date" id="fetch_end_date" name="end_date">
+		    </div>
+		    <button type="button" id="fetchButton" class="btn btn-fetch">Fetch Tasks</button>
+		</form>
         <div id="taskResults"></div>
     </section>
 
@@ -197,49 +203,65 @@
 	<script>
 	// Fetch Tasks Dynamically
 	document.getElementById('fetchButton').addEventListener('click', function () {
-	    const status = document.getElementById('status').value;
-	    const keyword = document.getElementById('keyword').value;
+	    const status = document.getElementById('fetch_status').value;
+	    const keyword = document.getElementById('fetch_keyword').value;
+	    const start_date = document.getElementById('fetch_start_date').value; // Correct ID
+	    const end_date = document.getElementById('fetch_end_date').value;     // Correct ID
+
 	    const params = new URLSearchParams();
 	    if (status) params.append('status', status);
 	    if (keyword) params.append('keyword', keyword);
+	    if (start_date) params.append('start_date', start_date);
+	    if (end_date) params.append('end_date', end_date);
+
+	    console.log(`Fetching tasks with params: ${params.toString()}`); // Debugging log
+
+	    // Fetch data from the server
 	    fetch(`/fetch?${params.toString()}`)
-	        .then(response => response.json())
+	        .then(response => {
+	            if (!response.ok) {
+	                throw new Error(`HTTP error! Status: ${response.status}`);
+	            }
+	            return response.json();
+	        })
 	        .then(data => {
 	            const taskResults = document.getElementById('taskResults');
 	            taskResults.innerHTML = ''; // Clear previous results
+
 	            if (data.success) {
 	                if (data.tasks.length === 0) {
 	                    taskResults.innerHTML = '<p>No tasks found.</p>';
 	                } else {
+	                    // Create table for displaying tasks
 	                    const table = document.createElement('table');
 	                    table.className = 'history-list';
-	                    const thead = `
-						    
-	                        <thead>  
-								<tr>
-								    <th colspan="6"><h2>Historical Tasks</h2></th>
-								</tr>							
+	                    table.innerHTML = `
+	                        <thead>
 	                            <tr>
 	                                <th>ID</th>
-									<th>Assigned Person</th>
+	                                <th>Assigned Person</th>
 	                                <th>Description</th>
 	                                <th>Status</th>
-	                                <th>Updates</th>
+	                                <th>Notes</th>
 	                                <th>Created At</th>
+	                                <th>Monthly Action</th>
 	                            </tr>
-	                        </thead>`;
-	                    table.innerHTML = thead;
+	                        </thead>
+	                    `;
+
 	                    const tbody = document.createElement('tbody');
 	                    data.tasks.forEach(task => {
 	                        const row = `
 	                            <tr>
 	                                <td>${task.id}</td>
-									<td>${task.assigned_person}</td>
+	                                <td>${task.assigned_person}</td>
 	                                <td>${task.description}</td>
 	                                <td>${task.status}</td>
 	                                <td>${task.notes || ''}</td>
 	                                <td>${task.created_at}</td>
-	                            </tr>`;
+	                                <td>${task.monthly_action_description}</td>
+	                            </tr>
+	                        `;
 	                        tbody.innerHTML += row;
 	                    });
 	                    table.appendChild(tbody);
@@ -251,8 +273,11 @@
 	        })
 	        .catch(error => {
 	            console.error('Error fetching tasks:', error);
+	            const taskResults = document.getElementById('taskResults');
+	            taskResults.innerHTML = '<p>An error occurred while fetching tasks. Please try again later.</p>';
 	        });
 	});
+
 	document.querySelectorAll(".notes-text").forEach(textarea => {
 	  textarea.addEventListener('change', function() {
 	    const taskId = this.closest('tr').querySelector("td:first-child").textContent;

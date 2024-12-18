@@ -271,38 +271,79 @@ def fetch_tasks():
     """Fetch tasks for the logged-in user based on filters."""
     if 'user_id' not in session:
         return jsonify({"success": False, "error": "Unauthorized access."}), 401
+
     user_id = session['user_id']
     status = request.args.get('status', '').strip()
     keyword = request.args.get('keyword', '').strip()
-
+    start_date = request.args.get('start_date', '').strip()
+    end_date = request.args.get('end_date', '').strip()
+ 
     try:
         with sqlite3.connect(DATABASE) as conn:
             cursor = conn.cursor()
-            query = "SELECT id, assigned_person, description, status, notes, updates, created_at FROM tasks WHERE user_id = ?"
+
+            # Base query
+            query = """
+                SELECT tasks.id, assigned_person, tasks.description, tasks.status, tasks.notes, tasks.updates, tasks.created_at,
+                       monthly_action_items.description AS monthly_action_description
+                FROM tasks
+                LEFT JOIN monthly_action_items
+                ON tasks.monthly_action_id = monthly_action_items.id
+                WHERE tasks.user_id = ?
+            """
             params = [user_id]
 
+            # Apply status filter
             if status:
-                query += " AND status = ?"
+                query += " AND tasks.status = ?"
                 params.append(status)
+
+            # Apply keyword filter
             if keyword:
-                query += " AND (description LIKE ? OR notes LIKE ?)"
+                query += " AND (tasks.description LIKE ? OR monthly_action_items.description LIKE ?)"
                 keyword_pattern = f"%{keyword}%"
                 params.extend([keyword_pattern, keyword_pattern])
 
+            # Apply date range filter
+            if start_date and end_date:
+                try:
+                    # Validate and add date range to the query
+                    start_date_obj = datetime.strptime(start_date, '%Y-%m-%d')
+                    end_date_obj = datetime.strptime(end_date, '%Y-%m-%d')
+
+                    if start_date_obj > end_date_obj:
+                        return jsonify({"success": False, "error": "Start date must be before or equal to end date"}), 400
+
+                    query += " AND tasks.created_at BETWEEN ? AND ?"
+                    params.extend([f"{start_date} 00:00:00", f"{end_date} 23:59:59"])
+                except ValueError:
+                    return jsonify({"success": False, "error": "Invalid date format. Use YYYY-MM-DD"}), 400
+
+            # Execute the query
+            print(f"Executing query: {query} with params: {params}")  # Debugging log
             cursor.execute(query, params)
             tasks = cursor.fetchall()
+
+        # Prepare response
         return jsonify({
             "success": True,
             "tasks": [
-                {"id": task[0],"assigned_person": task[1], "description": task[2], "status": task[3], "notes": task[4], "updates": task[5], "created_at": task[6]}
+                {
+                    "id": task[0],
+                    "assigned_person": task[1] or "Not Assigned",
+                    "description": task[2],
+                    "status": task[3],
+                    "notes": task[4] or "",
+                    "updates": task[5] or "",
+                    "created_at": task[6],
+                    "monthly_action_description": task[7] or "No linked action"
+                }
                 for task in tasks
             ]
         })
     except sqlite3.Error as e:
         print(f"Database error: {e}")
         return jsonify({"success": False, "error": "Unable to fetch tasks"}), 500
-
-from io import BytesIO
 
 @app.route('/export', methods=['GET'])
 def export_tasks():
