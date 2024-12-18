@@ -72,8 +72,9 @@
 	}
 
 	.chart-item:hover {
-	    transform: scale(1.02);
+	    transform: translateY(-5px); /* A subtle translation effect instead */
 	}
+
 
 	/* Chart Wrapper */
 	.chart-wrapper {
@@ -142,6 +143,12 @@
 	        border: 1px solid #ddd;
 	    }
 	}
+	
+	body, .chart-item, .form-control {
+	    -webkit-font-smoothing: antialiased;
+	    -moz-osx-font-smoothing: grayscale;
+	}
+	
 	</style>
 
 <script>
