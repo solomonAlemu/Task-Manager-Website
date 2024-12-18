@@ -606,13 +606,16 @@ def monthly_progress_data():
                     return jsonify({"error": "Invalid date format. Please use YYYY-MM-DD format."}), 400
 
             # 1. Priority vs Completion Percentage
+            # Concatenating description and priority (optional)
             cursor.execute(f"""
-                SELECT priority, 
+                SELECT description || ' ' || priority AS description_and_priority, 
                        AVG(percentage_completion) AS avg_completion 
-                {task_base_query}
-                GROUP BY priority
+                {action_base_query}
+                GROUP BY description_and_priority
             """, params)
+            
             priority_completion_data = cursor.fetchall()
+
 
             # 2. Monthly Progress for Tasks
             cursor.execute(f"""
@@ -797,6 +800,7 @@ def task_data():
                 priority,
                 percentage_completion AS progress,
                 created_at,
+                due_date,   -- Include due_date in the query
                 status
             FROM tasks
             WHERE user_id = ? AND status IN ('Open', 'In Progress', 'Completed')
@@ -831,7 +835,8 @@ def task_data():
                         "priority": task[2] or "Medium",
                         "progress": task[3] or 0,
                         "created_at": task[4] or "No creation date",
-                        "status": task[5]
+                        "due_date": task[5] or None,  # Include due_date or None if not set
+                        "status": task[6]
                     }
                     for task in tasks
                 ],
@@ -854,7 +859,6 @@ def task_data():
     except Exception as e:
         print(f"Unexpected error: {e}")
         return jsonify({"error": "An unexpected error occurred.", "details": str(e)}), 500
-
 
 # Add new routes for email management
 @app.route('/manage-emails', methods=['GET', 'POST'])

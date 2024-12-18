@@ -22,55 +22,127 @@
         </form>
     </div>
 
-    <div class="chart-grid">
-        <!-- Priority vs Progress Chart -->
-        <div class="chart-item">
-            <h3 class="chart-title">Priority vs Progress</h3>
-            <canvas id="priorityChart" class="chart-canvas"></canvas>
-        </div>
+	    <div class="chart-grid">
+	        <!-- Priority vs Progress Chart -->
+	        <div class="chart-item priority-chart">
+	            <h3 class="chart-title">Priority vs Progress</h3>
+	            <div class="chart-wrapper">
+	                <canvas id="priorityChart" class="chart-canvas"></canvas>
+	            </div>
+	        </div>
 
-        <!-- Due Date Progress Bars -->
-        <div class="chart-item">
-            <h3 class="chart-title">Due Date Progress</h3>
-            <div id="progressBars"></div>
-        </div>
-    </div>
-</div>
+	        <!-- Due Date Progress Bars -->
+	        <div class="chart-item">
+	            <h3 class="chart-title">Task  Progress</h3>
+	            <div id="progressBars"></div>
+	        </div>
+	    </div>
+	</div>
 
-<style>
-/* Grid layout for charts */
-.chart-grid {
-    display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); /* Flexible column layout */
-    gap: 20px; /* Space between charts */
-}
+	<style>
+	/* Adopted styles from monthly_progress.html */
 
-.chart-item {
-    background-color: #fff;
-    border-radius: 10px;
-    padding: 20px;
-    box-shadow: 0 5px 15px rgba(0, 0, 0, 0.1);
-    text-align: center;
-}
+	/* Dashboard Layout */
+	.chart-container {
+	    max-width: 1400px;
+	    margin: 0 auto;
+	    padding: 20px;
+	}
 
-.chart-canvas {
-    max-width: 100%;
-    max-height: 350px; /* Maximum chart height */
-}
+	/* Responsive Grid Layout for Charts */
+	.chart-grid {
+	    display: grid;
+	    grid-template-columns: repeat(3, 1fr);
+	    gap: 20px;
+	    width: 100%;
+	}
 
-.date-range-selector {
-    background-color: #f8f9fa;
-    padding: 15px;
-    border-radius: 10px;
-    margin-bottom: 20px;
-}
+	/* Priority Chart Spanning Two Columns */
+	.priority-chart {
+	    grid-column: span 2;
+	}
 
-.chart-title {
-    word-wrap: break-word; /* Ensure title text wraps cleanly */
-    white-space: normal;
-    overflow-wrap: break-word;
-}
-</style>
+	/* Chart Card Styling */
+	.chart-item {
+	    background-color: #ffffff;
+	    border-radius: 12px;
+	    box-shadow: 0 6px 15px rgba(0, 0, 0, 0.08);
+	    overflow: hidden;
+	    transition: transform 0.3s ease;
+	}
+
+	.chart-item:hover {
+	    transform: scale(1.02);
+	}
+
+	/* Chart Wrapper */
+	.chart-wrapper {
+	    position: relative;
+	    padding: 15px; /* Removed height and width changes to avoid affecting chart size */
+	}
+
+	.chart-canvas {
+	    position: absolute;
+	    top: 0;
+	    left: 0;
+	    width: 100%;
+	    height: 100%;
+	}
+
+	/* Date Range Selector */
+	.date-range-selector {
+	    background-color: #f8f9fa;
+	    border-radius: 10px;
+	    padding: 20px;
+	    margin-bottom: 25px;
+	    box-shadow: 0 4px 6px rgba(0, 0, 0, 0.05);
+	}
+
+	.date-range-selector .form-control {
+	    border-radius: 6px;
+	}
+
+	/* Responsive Adjustments */
+	@media (max-width: 1200px) {
+	    .chart-grid {
+	        grid-template-columns: repeat(2, 1fr);
+	    }
+	    
+	    .priority-chart {
+	        grid-column: span 2;
+	    }
+	}
+
+	@media (max-width: 768px) {
+	    .chart-grid {
+	        grid-template-columns: 1fr;
+	    }
+	    
+	    .priority-chart {
+	        grid-column: span 2;
+	    }
+	    
+	    .chart-wrapper {
+	        height: auto; /* Adjust for responsive layouts without changing aspect ratio */
+	    }
+	}
+
+	/* Chart Color Palette */
+	.chart-item:nth-child(1) { border-top: 4px solid #3498db; }
+	.chart-item:nth-child(2) { border-top: 4px solid #2ecc71; }
+	.chart-item:nth-child(3) { border-top: 4px solid #e74c3c; }
+	.chart-item:nth-child(4) { border-top: 4px solid #f39c12; }
+	.chart-item:nth-child(5) { border-top: 4px solid #9b59b6; }
+	.chart-item:nth-child(6) { border-top: 4px solid #1abc9c; }
+
+	/* Accessibility and Print Considerations */
+	@media print {
+	    .chart-item {
+	        box-shadow: none;
+	        border: 1px solid #ddd;
+	    }
+	}
+	</style>
 
 <script>
     document.addEventListener("DOMContentLoaded", () => {
@@ -134,7 +206,7 @@
                                 display: true,
                                 text: 'Task Priority and Progress Overview',
                                 font: {
-                                    size: 18
+                                    size: 14
                                 }
                             },
                             tooltip: {
@@ -150,7 +222,7 @@
                             x: {
                                 ticks: {
                                     font: {
-                                        size: 12
+                                        size: 14
                                     }
                                 }
                             },
@@ -159,7 +231,7 @@
                                 max: 100,
                                 ticks: {
                                     font: {
-                                        size: 12
+                                        size: 14
                                     }
                                 }
                             }
@@ -167,71 +239,66 @@
                     }
                 });
 
-                // Enhanced Due Date Progress Bars
-                const progressBars = document.getElementById('progressBars');
-                progressBars.innerHTML = '';
-                data.tasks.forEach(task => {
-                    const barContainer = document.createElement('div');
-                    barContainer.style.margin = '15px 0';
-                    barContainer.style.display = 'flex';
-                    barContainer.style.alignItems = 'center';
+				// Enhanced Due Date Progress Bars
+				const progressBars = document.getElementById('progressBars');
+				progressBars.innerHTML = '';
+				data.tasks.forEach(task => {
+				    const barContainer = document.createElement('div');
+				    barContainer.style.margin = '15px 0';
 
-                    const label = document.createElement('div');
-                    label.style.width = '30%';
-                    label.style.fontWeight = 'bold';
-                    label.innerHTML = `
-                        <span>${task.name}</span><br>
-                        <small style="color: #666;">${task.due_date || 'No Due Date'}</small>
-                    `;
-                    barContainer.appendChild(label);
+				    // Create description container
+				    const description = document.createElement('div');
+				    description.style.marginBottom = '5px';
+				    description.innerHTML = `
+				        <strong>${task.name}</strong><br>
+						<small style="color: #666;">  Due Date: ${task.due_date ? task.due_date : 'No Due Date'} </small>
+				    `;
+				    barContainer.appendChild(description);
 
-                    const progressBar = document.createElement('div');
-                    progressBar.style.width = '70%';
-                    progressBar.style.backgroundColor = '#eee';
-                    progressBar.style.borderRadius = '5px';
-                    progressBar.style.position = 'relative';
-                    progressBar.style.height = '20px'; /* Reduced height for a slimmer look */
+				    // Create progress bar container
+				    const progressBar = document.createElement('div');
+				    progressBar.style.backgroundColor = '#eee';
+				    progressBar.style.borderRadius = '5px';
+				    progressBar.style.position = 'relative';
+				    progressBar.style.height = '20px';
 
-                    const progress = document.createElement('div');
-                    progress.style.width = `${task.progress}%`;
-                    progress.style.height = '100%';
-                    let color;
-                    if (task.progress > 90) {
-                        color = 'linear-gradient(to right, #228B22, #006400)'; // Dark Green to Green
-                    } else if (task.progress > 75) {
-                        color = 'linear-gradient(to right, #32CD32 , #228B22)'; // Light Green to Green
-                    } else if (task.progress > 60) {
-                        color = 'linear-gradient(to right, #ADFF2F, #32CD32)'; // Yellow Green to Light Green
-                    } else if (task.progress > 45) {
-                        color = 'linear-gradient(to right, #FFFF00, #ADFF2F)'; // Yellow to Yellow Green
-                    } else if (task.progress > 30) {
-                        color = 'linear-gradient(to right, #FFA500, #FFFF00)'; // Orange to Yellow
-                    } else {
-                        color = 'linear-gradient(to right, #FF0000,  #FFFF00)'; // Red to Orange
-                    }
-                    progress.style.background = color;
+				    const progress = document.createElement('div');
+				    progress.style.width = `${task.progress}%`;
+				    progress.style.height = '100%';
+				    let color;
+				    if (task.progress > 90) {
+				        color = 'linear-gradient(to right, #228B22, #006400)';
+				    } else if (task.progress > 75) {
+				        color = 'linear-gradient(to right, #32CD32 , #228B22)';
+				    } else if (task.progress > 60) {
+				        color = 'linear-gradient(to right, #ADFF2F, #32CD32)';
+				    } else if (task.progress > 45) {
+				        color = 'linear-gradient(to right, #FFFF00, #ADFF2F)';
+				    } else if (task.progress > 30) {
+				        color = 'linear-gradient(to right, #FFA500, #FFFF00)';
+				    } else {
+				        color = 'linear-gradient(to right, #FF0000,  #FFFF00)';
+				    }
+				    progress.style.background = color;
+				    progress.style.borderRadius = '5px';
+				    progress.style.transition = 'width 0.5s ease-in-out';
 
-                    progress.style.borderRadius = '5px';
-                    progress.style.transition = 'width 0.5s ease-in-out';
+				    const progressText = document.createElement('span');
+				    progressText.textContent = `${task.progress}%`;
+				    progressText.style.position = 'absolute';
+				    progressText.style.right = '5px';
+				    progressText.style.top = '50%';
+				    progressText.style.transform = 'translateY(-50%)';
+				    progressText.style.color = 'black';
+				    progressText.style.fontWeight = 'bold';
 
-                    progress.style.borderRadius = '5px';
-                    progress.style.transition = 'width 0.5s ease-in-out';
+				    progressBar.appendChild(progress);
+				    progressBar.appendChild(progressText);
+				    barContainer.appendChild(progressBar);
 
-                    const progressText = document.createElement('span');
-                    progressText.textContent = `${task.progress}%`;
-                    progressText.style.position = 'absolute';
-                    progressText.style.right = '5px';
-                    progressText.style.top = '50%';
-                    progressText.style.transform = 'translateY(-50%)';
-                    progressText.style.color = 'white';
-                    progressText.style.fontWeight = 'bold';
+				    progressBars.appendChild(barContainer);
+				});
 
-                    progressBar.appendChild(progress);
-                    progressBar.appendChild(progressText);
-                    barContainer.appendChild(progressBar);
-
-                    progressBars.appendChild(barContainer);
-                });
             } catch (error) {
                 console.error('Error fetching chart data:', error);
             }
