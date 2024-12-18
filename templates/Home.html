@@ -137,12 +137,31 @@
 						            <button type="submit" class="status-btn" onclick="return confirm('Are you sure you want to update this item?')">Update</button>
 						        </div>
 						        <div class="grid-item">
+									<label for="assigned_person">Revised Assigned Person</label>
+									<input type="text" name="assigned_person">
+									<label for="priority">Revised Priority</label>
+									<select name="priority">
+									    <option value="High">High Priority</option>
+									    <option value="Medium" selected>Medium Priority</option>
+									    <option value="Low">Low Priority</option>
+									</select>																
 						            <label for="revised_description">Revised Description</label>
 						            <input type="text" name="revised_description">
-						            <label for="assigned_person">Revised Assigned Person</label>
-						            <input type="text" name="assigned_person">
 						            <label for="notes">Notes</label>
 						            <textarea name="notes" class="notes-text" placeholder="Add notes..."></textarea>
+									<div class="form-group">
+									    <label for="due_date">Revised Due Date</label>
+									    <input type="date" name="due_date">
+									</div>
+									<div class="form-group">
+									    <label for="monthly_action_id">Revised Monthly Action Item </label>
+									    <select name="monthly_action_id">
+									        <option value="">Select Monthly Action Item</option>
+									        {% for action in monthly_actions %}
+									        <option value="{{ action[0] }}">{{ action[1] }} ({{ action[2] }} Priority)</option>
+									        {% endfor %}
+									    </select>
+									</div>																		
 						        </div>
 						    </div>
 						</form>

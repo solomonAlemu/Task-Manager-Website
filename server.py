@@ -215,7 +215,9 @@ def update_task(task_id):
     percentage_completion = request.form.get('percentage_completion')
     notes = request.form.get('notes', '').strip()
     description = request.form.get('revised_description', '').strip()
-    
+    priority = request.form.get('priority', 'Medium')
+    due_date = request.form.get('due_date', '').strip()
+    monthly_action_id = request.form.get('monthly_action_id')   
     
     try:
         if percentage_completion:
@@ -234,7 +236,7 @@ def update_task(task_id):
             cursor = conn.cursor()
             # Fetch the existing task
             cursor.execute("""
-                SELECT assigned_person, description, status, percentage_completion, updates 
+                SELECT assigned_person, description, priority, status, percentage_completion, updates, due_date, monthly_action_id 
                 FROM tasks 
                 WHERE id = ? AND user_id = ?
             """, (task_id, user_id))
@@ -242,7 +244,7 @@ def update_task(task_id):
 
             if not task:
                 return "Error: Task not found or unauthorized.", 404
-            current_assigned_person, current_description, current_status, current_percentage, current_updates = task
+            current_assigned_person, current_description, current_priority, current_status,current_percentage, current_updates, current_due_date, current_monthly_action_id = task
             # Append new notes to updates
             update_entry = (
                 (current_updates or "") +
@@ -253,19 +255,27 @@ def update_task(task_id):
                 assigned_person = current_assigned_person
             if not description: 
                 description = current_description
-            if  status == "Open": 
+            if  status == "Open" or not status: 
                 status = current_status
             if  percentage_completion == 0: 
-                percentage_completion = current_percentage
-                                                          
+                percentage_completion = current_percentage   
+            if  not priority: 
+                priority = current_priority    
+            if  not due_date: 
+                due_date = current_due_date    
+            if  not monthly_action_id: 
+                monthly_action_id = current_monthly_action_id                                                                          
+ 
             # Update the task
             cursor.execute("""
-                UPDATE tasks 
-                SET assigned_person = ?, description = ?, status = ?, percentage_completion = ?, notes = ?, updates = ? 
+                UPDATE tasks
+                SET assigned_person = ?, description = ?, priority = ?, status = ?, 
+                    percentage_completion = ?, updates = ?, due_date = ?, monthly_action_id = ?
                 WHERE id = ? AND user_id = ?
-            """, (assigned_person, description, status, percentage_completion, update_entry, update_entry, task_id, user_id))
+            """, (assigned_person, description, priority, status, percentage_completion, update_entry, 
+                  due_date, monthly_action_id, task_id, user_id))
             conn.commit()
-
+                        
         return redirect(url_for('home'))
     except sqlite3.Error as e:
         print(f"Database error: {e}")
@@ -603,7 +613,9 @@ def update_monthly_action(action_id):
     percentage_completion = request.form.get('percentage_completion').strip()
     notes = request.form.get('notes', '').strip()
     description = request.form.get('revised_description', '').strip()
-    
+    priority = request.form.get('priority', 'Medium')
+    due_date = request.form.get('due_date', '').strip()
+   
     
     try:
         if percentage_completion:
@@ -631,13 +643,20 @@ def update_monthly_action(action_id):
             # Fetch one result from the query
             action = cursor.fetchone()
 
+            # Fetch the existing task
+            cursor.execute("""
+                SELECT  description, priority, status, due_date, notes, percentage_completion 
+                FROM monthly_action_items 
+                WHERE id = ? AND user_id = ?
+            """, (action_id, user_id))
+            action = cursor.fetchone()
 
             if not action:
                 return "Error: action not found or unauthorized.", 404
-            current_description, current_status,  current_updates, current_percentage = action
+            current_description, current_priority, current_status, current_due_date, current_notes, current_percentage_completion  = action
             # Append new notes to updates
             update_entry = (
-                (current_updates or "") +
+                (current_notes or "") +
                 f"\n\n== Update ({datetime.now().strftime('%Y-%m-%d %H:%M')})\n"
                 f"{notes or 'No notes'} | Status: {status}\n"
             )
@@ -646,13 +665,20 @@ def update_monthly_action(action_id):
             if  status == "Open" or not status: 
                 status = current_status
             if  percentage_completion == 0: 
-                percentage_completion = current_percentage                                                        
+                percentage_completion = current_percentage    
+            if  not priority: 
+                priority = current_priority    
+            if  not due_date: 
+                due_date = current_due_date    
+                                                              
             cursor.execute("""
-                UPDATE monthly_action_items 
-                SET description = ?, status = ?, notes = ?, percentage_completion = ?
+                UPDATE monthly_action_items
+                SET description = ?, priority = ?, status = ?, due_date = ?, notes = ?, percentage_completion = ?
                 WHERE id = ? AND user_id = ?
-            """, (description, status, update_entry, percentage_completion, action_id, user_id))
+            """, (description, priority, status, due_date, notes, percentage_completion, action_id, user_id))
             conn.commit()
+
+
         return redirect(url_for('monthly_action'))
     except sqlite3.Error as e:
         print(f"Database error: {e}")
