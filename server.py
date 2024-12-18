@@ -214,7 +214,9 @@ def update_task(task_id):
     status = request.form.get('status', 'Open')
     percentage_completion = request.form.get('percentage_completion', '0').strip()
     notes = request.form.get('notes', '').strip()
-
+    description = request.form.get('revised_description', '').strip()
+    
+    
     try:
         # Validate and convert percentage_completion to integer
         percentage_completion = int(percentage_completion)
@@ -236,9 +238,9 @@ def update_task(task_id):
                           f"{notes or 'No notes'} | Status: {status}\n"
             )
             cursor.execute("""
-                UPDATE tasks SET assigned_person = ?, status = ?, percentage_completion = ?, notes = ?, updates = ?
+                UPDATE tasks SET assigned_person = ?,description = ?, status = ?, percentage_completion = ?, notes = ?, updates = ?
                 WHERE id = ? AND user_id = ?
-            """, (assigned_person, status, percentage_completion, notes, update_entry, task_id, user_id))
+            """, (assigned_person, description, status, percentage_completion, notes, update_entry, task_id, user_id))
             conn.commit()
 
         return redirect(url_for('home'))
