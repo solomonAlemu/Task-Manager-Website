@@ -96,26 +96,37 @@
                     <td>{{ action[0] }}</td>
                     <td>{{ action[1] }}</td>
                     <td>{{ action[2] }}</td>
-                    <td>{{ action[4] or 'N/A' }}</td>
+                    <td>{{ action[4] or '' }}</td>
                     <td>{{ action[3] }}</td>
-                    <td>{{ action[5] }}%</td>
+                    <td>{{ action[5] if action[5] else "0"}} %</td>
                     <td>
-                        <form action="{{ url_for('update_monthly_action', action_id=action[0]) }}" method="post">
-                            <select name="status">
-                                <option value="Open" {% if action[3] == 'Open' %}selected{% endif %}>Open</option>
-                                <option value="In Progress" {% if action[3] == 'In Progress' %}selected{% endif %}>In Progress</option>
-                                <option value="Completed" {% if action[3] == 'Completed' %}selected{% endif %}>Completed</option>
-                                <option value="Cancelled" {% if action[3] == 'Cancelled' %}selected{% endif %}>Cancelled</option>
-                            </select>
-                            <input type="number" name="percentage_completion" value="{{ action[5] }}" min="0" max="100">
-                            <textarea name="notes">{{ action[6] or '' }}</textarea>
-                            <button type="submit" class="status-btn">Update</button>
-                        </form>
+						<button type="button" id="show-status-btn-{{ action[0] }}" class="show-btn" onclick="toggleUpdates_2({{ action[0] }})">Edit Action</button>
+						<form action="{{ url_for('update_monthly_action', action_id=action[0]) }}" method="post">	
+						    <div id="grid-container-{{ action[0] }}" class="grid-container"  style="display: none;">
+		                            <select name="status">
+										<option value="" selected>Select Status</option>
+										<option value="Open">Open</option>
+										<option value="In Progress">In Progress</option>
+										<option value="Completed">Completed</option>
+										<option value="Cancelled">Cancelled</option>
+		                            </select>
+									<label for="revised_description">Revised Description</label>
+									<input type="text" name="revised_description">								
+									<input type="number" id="progress" name="percentage_completion" min="0" max="100" step="1" />
+		                            <textarea name="notes"> </textarea>
+		                            <button type="submit" class="status-btn">Update</button>	                      
+							</div>
+						</form>
                         <form action="{{ url_for('delete_monthly_action', action_id=action[0]) }}" method="post">
                             <button type="submit" class="delete-btn" onclick="return confirm('Are you sure you want to delete this item?')">Delete</button>
                         </form>
                     </td>
-                    <td class="updates">{{ action[6] }}</td>
+			<td>
+			    <button type="button" id="show-updates-btn-{{ action[0] }}" class="show-btn" onclick="toggleUpdates({{ action[0] }})">Show Task Updates</button>
+			    <div id="update-section-{{ action[0] }}" class="updates" style="display: none;">
+				{{ action[6] }}
+			    </div>
+			</td>
                 </tr>
                 {% endfor %}
             </tbody>
@@ -227,6 +238,21 @@
             const fetchSection = document.getElementById('fetchForm');
             fetchSection.style.display = fetchSection.style.display === 'none' ? 'block' : 'none';
         });
+		document.getElementById('show-status-btn').addEventListener('click', function () {
+		    const fetchSection = document.querySelector('.grid-container');
+		    fetchSection.style.display = fetchSection.style.display === 'none' ? 'block' : 'none';
+		});
+
+		function toggleUpdates(taskId) {
+		    const updateSection = document.getElementById(`update-section-${taskId}`);
+		    updateSection.style.display = updateSection.style.display === 'none' ? 'block' : 'none';
+		}
+
+		function toggleUpdates_2(taskId) {
+		    const updateSection = document.getElementById(`grid-container-${taskId}`);
+		    updateSection.style.display = updateSection.style.display === 'none' ? 'block' : 'none';
+		}		
+				
     </script>
 </div>
 {% endblock %}

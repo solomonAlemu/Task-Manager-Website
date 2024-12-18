@@ -153,7 +153,7 @@ def home():
                 FROM tasks
                 LEFT JOIN monthly_action_items
                 ON tasks.monthly_action_id = monthly_action_items.id
-                WHERE tasks.user_id = ? AND tasks.status IN ('Open', 'In Progress')
+                WHERE tasks.user_id = ? AND tasks.status NOT IN ('Completed', 'Cancelled')
             """, (user_id,))
             tasks = cursor.fetchall()
 
@@ -212,35 +212,58 @@ def update_task(task_id):
     user_id = session['user_id']
     assigned_person = request.form.get('assigned_person')
     status = request.form.get('status', 'Open')
-    percentage_completion = request.form.get('percentage_completion', '0').strip()
+    percentage_completion = request.form.get('percentage_completion')
     notes = request.form.get('notes', '').strip()
     description = request.form.get('revised_description', '').strip()
     
     
     try:
-        # Validate and convert percentage_completion to integer
-        percentage_completion = int(percentage_completion)
-        if not 0 <= percentage_completion <= 100:
-            return "Error: Completion percentage must be between 0 and 100.", 400
+        if percentage_completion:
+            try:
+                percentage_completion = int(percentage_completion)
+            except ValueError:
+                # Handle the case where the conversion fails
+                percentage_completion = None
+                # You can also add logging or an error message here
+        else:
+            # Handle the case where the value is empty
+            percentage_completion = None
+            # You can also add logging or an error message here
 
         with get_db_connection() as conn:
             cursor = conn.cursor()
+            # Fetch the existing task
             cursor.execute("""
-                SELECT updates FROM tasks WHERE id = ? AND user_id = ?
-            """, (task_id, user_id))
-            current_updates = cursor.fetchone()
-            if not current_updates:
-                return "Error: Task not found or unauthorized.", 404
-
-            updates = current_updates[0] if current_updates else ""
-            update_entry = (
-                updates + f"\n\n== Update ({datetime.now().strftime('%Y-%m-%d %H:%M')})\n"
-                          f"{notes or 'No notes'} | Status: {status}\n"
-            )
-            cursor.execute("""
-                UPDATE tasks SET assigned_person = ?,description = ?, status = ?, percentage_completion = ?, notes = ?, updates = ?
+                SELECT assigned_person, description, status, percentage_completion, updates 
+                FROM tasks 
                 WHERE id = ? AND user_id = ?
-            """, (assigned_person, description, status, percentage_completion, notes, update_entry, task_id, user_id))
+            """, (task_id, user_id))
+            task = cursor.fetchone()
+
+            if not task:
+                return "Error: Task not found or unauthorized.", 404
+            current_assigned_person, current_description, current_status, current_percentage, current_updates = task
+            # Append new notes to updates
+            update_entry = (
+                (current_updates or "") +
+                f"\n\n== Update ({datetime.now().strftime('%Y-%m-%d %H:%M')})\n"
+                f"{notes or 'No notes'} | Status: {status}\n"
+            )
+            if not assigned_person: 
+                assigned_person = current_assigned_person
+            if not description: 
+                description = current_description
+            if  status == "Open": 
+                status = current_status
+            if  percentage_completion == 0: 
+                percentage_completion = current_percentage
+                                                          
+            # Update the task
+            cursor.execute("""
+                UPDATE tasks 
+                SET assigned_person = ?, description = ?, status = ?, percentage_completion = ?, notes = ?, updates = ? 
+                WHERE id = ? AND user_id = ?
+            """, (assigned_person, description, status, percentage_completion, update_entry, update_entry, task_id, user_id))
             conn.commit()
 
         return redirect(url_for('home'))
@@ -560,7 +583,7 @@ def monthly_action():
             cursor.execute('''
                 SELECT id, description, priority, status, due_date, percentage_completion, notes
                 FROM monthly_action_items
-                WHERE user_id = ? AND status IN ('Open', 'In Progress')
+                WHERE user_id = ? AND status NOT IN ('Completed', 'Cancelled')
                 ORDER BY created_at DESC
             ''', (user_id,))
             monthly_actions = cursor.fetchall()
@@ -574,34 +597,61 @@ def update_monthly_action(action_id):
     """Update a monthly action status."""
     if 'user_id' not in session:
         return redirect(url_for('login'))    
-    user_id = session['user_id']        
+    user_id = session['user_id']    
+    
     status = request.form.get('status', 'Open')
-    percentage_completion = request.form.get('percentage_completion', '0').strip()
+    percentage_completion = request.form.get('percentage_completion').strip()
     notes = request.form.get('notes', '').strip()
-
+    description = request.form.get('revised_description', '').strip()
+    
+    
     try:
-        percentage_completion = int(percentage_completion)
-        if not 0 <= percentage_completion <= 100:
-            return "Error: Completion percentage must be between 0 and 100.", 400
+        if percentage_completion:
+            try:
+                percentage_completion = int(percentage_completion)
+            except ValueError:
+                # Handle the case where the conversion fails
+                percentage_completion = None
+                # You can also add logging or an error message here
+        else:
+            # Handle the case where the value is empty
+            percentage_completion = None
+            # You can also add logging or an error message here
 
         with get_db_connection() as conn:
             cursor = conn.cursor()
+            # Fetch the existing action
+            # Execute SQL query to fetch the existing action details
             cursor.execute("""
-                SELECT notes FROM monthly_action_items WHERE id = ? AND user_id = ?
-            """, (action_id, user_id))
-            current_updates = cursor.fetchone()
-            if not current_updates:
-                return "Error: Task not found or unauthorized.", 404
-            updates = current_updates[0] if current_updates else ""
-            update_entry = (
-                updates + f"\n\n== Update ({datetime.now().strftime('%Y-%m-%d %H:%M')})\n"
-                          f"{notes or 'No notes'} \n"
-            )                
-            cursor.execute('''
-                UPDATE monthly_action_items 
-                SET status = ?, percentage_completion = ?, notes = ?
+                SELECT description, status, notes, percentage_completion
+                FROM monthly_action_items 
                 WHERE id = ? AND user_id = ?
-            ''', (status, percentage_completion, update_entry, action_id, user_id))
+            """, (action_id, user_id))
+            
+            # Fetch one result from the query
+            action = cursor.fetchone()
+
+
+            if not action:
+                return "Error: action not found or unauthorized.", 404
+            current_description, current_status,  current_updates, current_percentage = action
+            # Append new notes to updates
+            update_entry = (
+                (current_updates or "") +
+                f"\n\n== Update ({datetime.now().strftime('%Y-%m-%d %H:%M')})\n"
+                f"{notes or 'No notes'} | Status: {status}\n"
+            )
+            if not description: 
+                description = current_description
+            if  status == "Open" or not status: 
+                status = current_status
+            if  percentage_completion == 0: 
+                percentage_completion = current_percentage                                                        
+            cursor.execute("""
+                UPDATE monthly_action_items 
+                SET description = ?, status = ?, notes = ?, percentage_completion = ?
+                WHERE id = ? AND user_id = ?
+            """, (description, status, update_entry, percentage_completion, action_id, user_id))
             conn.commit()
         return redirect(url_for('monthly_action'))
     except sqlite3.Error as e:
@@ -620,14 +670,15 @@ def delete_monthly_action(action_id):
         with sqlite3.connect(DATABASE) as conn:
             cursor = conn.cursor()
             # First, remove any linked tasks
-            cursor.execute("DELETE FROM tasks WHERE monthly_action_id = ?", (task_id, user_id))
+            cursor.execute("DELETE FROM tasks WHERE monthly_action_id = ? AND user_id = ?", (action_id, user_id))
             # Then delete the monthly action item
-            cursor.execute("DELETE FROM monthly_action_items WHERE id = ?", (task_id, user_id))
+            cursor.execute("DELETE FROM monthly_action_items WHERE id = ? AND user_id = ?", (action_id, user_id))
             conn.commit()
         return redirect(url_for('monthly_action'))
     except sqlite3.Error as e:
         print(f"Database error: {e}")
         return "Error: Unable to delete monthly action item.", 500
+
 
 @app.route('/monthly-progress')
 def monthly_progress():

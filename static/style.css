@@ -235,7 +235,7 @@ form button.delete-btn {
 }
  
 .show-btn {
-    background-color: #007bff; /* Blue background */
+    background-color: #4CAF50;
     color: white; /* White text */
     font-size: 16px; /* Medium font size */
     padding: 10px 20px; /* Padding around the button */
