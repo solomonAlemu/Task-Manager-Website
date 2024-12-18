@@ -434,9 +434,12 @@ def fetch_actions():
     """Fetch monthly actions for the logged-in user based on filters."""
     if 'user_id' not in session:
         return jsonify({"success": False, "error": "Unauthorized access."}), 401
+
     user_id = session['user_id']
     status = request.args.get('status', '').strip()
     keyword = request.args.get('keyword', '').strip()
+    start_date = request.args.get('start_date', '').strip()
+    end_date = request.args.get('end_date', '').strip()
 
     try:
         with get_db_connection() as conn:
@@ -449,16 +452,35 @@ def fetch_actions():
             """
             params = [user_id]
 
+            # Apply status filter
             if status:
                 query += " AND status = ?"
                 params.append(status)
+
+            # Apply keyword filter
             if keyword:
                 query += " AND (description LIKE ? OR notes LIKE ?)"
                 keyword_pattern = f"%{keyword}%"
                 params.extend([keyword_pattern, keyword_pattern])
 
+            # Apply date range filter
+            if start_date and end_date:
+                try:
+                    start_date_obj = datetime.strptime(start_date, '%Y-%m-%d')
+                    end_date_obj = datetime.strptime(end_date, '%Y-%m-%d')
+
+                    if start_date_obj > end_date_obj:
+                        return jsonify({"success": False, "error": "Start date must be before or equal to end date"}), 400
+
+                    query += " AND created_at BETWEEN ? AND ?"
+                    params.extend([f"{start_date} 00:00:00", f"{end_date} 23:59:59"])
+                except ValueError:
+                    return jsonify({"success": False, "error": "Invalid date format. Use YYYY-MM-DD"}), 400
+
+            # Execute the query
             cursor.execute(query, params)
             monthly_actions = cursor.fetchall()
+
         return jsonify({
             "success": True,
             "monthly_actions": [
@@ -467,7 +489,7 @@ def fetch_actions():
                     "description": action[1],
                     "status": action[2],
                     "notes": action[3],
-                    "due_date": action[4],
+                    "created_at": action[4],
                     "percentage_completion": action[5],
                     "created_at": action[6],
                 }
@@ -477,6 +499,7 @@ def fetch_actions():
     except sqlite3.Error as e:
         print(f"Database error: {e}")
         return jsonify({"success": False, "error": "Unable to fetch monthly actions"}), 500
+
 
 @app.route('/delete_historical', methods=['POST'])
 def delete_historical_tasks():
