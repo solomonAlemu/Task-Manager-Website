@@ -1035,14 +1035,19 @@ def send_task_email():
     try:
         # Retrieve and validate inputs
         task_id = request.form.get('task_id')
-        recipients = json.loads(request.form.get('recipients', '[]'))
+        recipients = request.form.get('recipients', '[]')
         intent = request.form.get('intent')
+        email_subject = request.form.get('subject')
+        email_body = request.form.get('body')
+        
+        # Ensure email body is not None
+        email_body = email_body if email_body else ""
 
-        if not task_id or not recipients or not intent:
-            return jsonify({
-                "success": False,
-                "message": "Invalid input: task_id, recipients, and intent are required."
-            }), 400
+        # Validate required inputs
+
+        
+        # Parse recipients from JSON string
+        recipients = json.loads(recipients)
 
         # Fetch task details from the database
         with sqlite3.connect(DATABASE) as conn:
@@ -1059,6 +1064,8 @@ def send_task_email():
             return jsonify({"success": False, "message": "Task not found"}), 404
 
         task_details = {
+            "email_subject": email_subject,
+            "email_body": email_body,
             "description": task[0],
             "priority": task[1],
             "status": task[2],
@@ -1082,8 +1089,6 @@ def send_task_email():
     except Exception as e:
         print(f"Unexpected error in /send-task-email: {e}")
         return jsonify({"success": False, "message": str(e)}), 500
-
-
 
 @app.route('/get-emails', methods=['GET'])
 def get_emails():

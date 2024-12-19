@@ -103,25 +103,23 @@
 						<button type="button" id="show-status-btn-{{ action[0] }}" class="show-btn" onclick="toggleUpdates_2({{ action[0] }})">Edit Action</button>
 						<form action="{{ url_for('update_monthly_action', action_id=action[0]) }}" method="post">	
 						    <div id="grid-container-{{ action[0] }}" class="grid-container"  style="display: none;">
-		                            <select name="status">
+		                            <select name="status" placeholder="Revised Status" >
 										<option value="" selected>Select Status</option>
 										<option value="Open">Open</option>
 										<option value="In Progress">In Progress</option>
 										<option value="Completed">Completed</option>
 										<option value="Cancelled">Cancelled</option>
 		                            </select>
-									<label for="revised_description">Revised Description</label>
-									<input type="text" name="revised_description">
-									<label for="priority">Priority</label>
+									<input type="text" name="revised_description" placeholder="Revised Description">
 									<select name="priority" id="priority">
+									  <option value="" selected>Select priority</option>
 									  <option value="High">High</option>
-									  <option value="Medium" selected>Medium</option>
+									  <option value="Medium">Medium</option>
 									  <option value="Low">Low</option>
 									</select>
-									<label for="due_date">Due Date</label>
-									<input type="date" name="due_date" id="due_date">																
-									<input type="number" id="progress" name="percentage_completion" min="0" max="100" step="1" />
-									<textarea name="notes"> </textarea>
+									<input type="date" name="due_date" id="due_date" placeholder="Due Date">														
+									<input type="number" id="progress" name="percentage_completion" min="0" max="100" step="1"  placeholder="Percentage (%)" />
+									<textarea name="notes" class="notes-text" placeholder="Add notes..."></textarea>
 									<button type="submit" class="status-btn">Update</button>	                      
 							</div>
 						</form>

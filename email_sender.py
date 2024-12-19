@@ -23,10 +23,12 @@ class EmailNotifier:
             # Generate the salutation
             recipient_names = [recipient['name'] for recipient in recipient_list]
             salutation = f"Dear {', '.join(recipient_names[:-1])} & {recipient_names[-1]}," if len(recipient_names) > 1 else f"Dear {recipient_names[0]},"
-
+            
+            if email_intent == "Custom":
+                mail.Body  = f"""{task_details.get('email_body')}"""               
             # Construct the email body based on intent
-            if email_intent == "Assignment":
-                body = f"""{salutation}
+            elif email_intent == "Assignment":
+                mail.Body  = f"""{salutation}
 Greetings!
 
 You have been assigned a new task:
@@ -41,7 +43,7 @@ Best regards,
 Your Team
                 """
             elif email_intent == "Status request":
-                body = f"""{salutation}
+                mail.Body  = f"""{salutation}
 Greetings!
 
 I kindly request a status update for the following task:
@@ -57,7 +59,7 @@ Best regards,
 Your Team
                 """
             elif email_intent == "Reminder":
-                body = f"""{salutation}
+                mail.Body  = f"""{salutation}
 Greetings!
 
 This is a reminder for the following task:
@@ -72,7 +74,7 @@ Best regards,
 Your Team
                 """
             elif email_intent == "Notification":
-                body = f"""{salutation}
+                mail.Body  = f"""{salutation}
 Greetings!
 
 Here is an update regarding the following task:
@@ -88,10 +90,12 @@ Best regards,
 Your Team
                 """
             else:
-                body = f"{salutation}\n\nNo specific intent provided for this email."
-
-            mail.Subject = f"{email_intent}: {task_details.get('description', 'Unnamed Task')}"
-            mail.Body = body
+                mail.Body  = f"{salutation}\n\nNo specific intent provided for this email."
+                
+            if email_intent == "Custom":
+                mail.Subject  = f"""{task_details.get('email_subject', 'N/A')}"""     
+            else:
+                mail.Subject = f"{email_intent}: {task_details.get('description', 'Unnamed Task')}"    
             mail.To = "; ".join([recipient['email'] for recipient in recipient_list])
             mail.Send()
 
