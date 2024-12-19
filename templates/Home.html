@@ -132,7 +132,6 @@
 						                <option value="Completed">Completed</option>
 						                <option value="Cancelled">Cancelled</option>
 						            </select>
-						            <button type="submit" class="status-btn" onclick="return confirm('Are you sure you want to update this item?')">Update</button>
 						        </div>
 						        <div class="grid-item">
 									<input type="text" name="assigned_person" placeholder="Revised Assigned Person" >
@@ -156,6 +155,7 @@
 									    </select>
 									</div>																		
 						        </div>
+								<button type="submit" class="status-btn" onclick="return confirm('Are you sure you want to update this item?')">Update</button>
 						    </div>
 						</form>
 		                <!-- Delete Task -->
@@ -519,7 +519,37 @@
         const fetchSection = document.querySelector('.add-task-form');
         fetchSection.style.display = fetchSection.style.display === 'none' ? 'block' : 'none';
     });
- 	
+
+	document.addEventListener('DOMContentLoaded', () => {
+	    const today = new Date();
+	    today.setHours(0, 0, 0, 0); // Normalize today's date to midnight
+
+	    const rows = document.querySelectorAll('table.table-striped tbody tr');
+
+	    rows.forEach(row => {
+	        const dueDateCell = row.querySelector('td:nth-child(7)'); // Adjust to 7th column for due_date
+	        if (dueDateCell && dueDateCell.textContent) {
+	            const dueDateString = dueDateCell.textContent.trim();
+	            const dueDate = new Date(dueDateString); // Parse the due date
+
+	            // Ensure the date is valid
+	            if (!isNaN(dueDate)) {
+	                dueDate.setHours(0, 0, 0, 0); // Normalize due date to midnight
+
+	                // Compare the due date with today's date
+	                if (dueDate < today) {
+	                    row.classList.add('past-due'); // Add a class for overdue tasks
+	                } else if (dueDate.getTime() === today.getTime()) {
+	                    row.classList.add('due-today'); // Add a class for tasks due today
+	                } else {
+	                    row.classList.add('future-due'); // Add a class for future tasks
+	                }
+	            }
+	        }
+	    });
+	});
+
+	 	
 	function toggleUpdates(taskId) {
 	    const updateSection = document.getElementById(`update-section-${taskId}`);
 	    updateSection.style.display = updateSection.style.display === 'none' ? 'block' : 'none';

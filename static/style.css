@@ -552,3 +552,40 @@ textarea {
 	align-items: left;
 	margin-bottom: 1px;
 }
+.past-due {
+
+    color: rgb(255, 0, 0); /* Red text */
+}
+
+.due-today {
+
+    color: rgb(198, 198, 0); /* Yellow text */
+}
+
+.future-due {
+
+    color: #006600; /* Green text */
+}
+
+
+table tr:nth-child(even) {
+    background: #f9f9f9;
+}
+
+table tr:hover {
+    background: #f1f1f1;
+}
+
+.action-list tr.past-due td,
+.action-list tr.due-today td,
+.action-list tr.future-due td {
+    background: inherit !important; /* Ensure it’s not overridden */
+}
+
+/* Ensure striping and hover don't interfere */
+.action-list tr.past-due td,
+.action-list tr.due-today td,
+.action-list tr.future-due td {
+    background: inherit !important;
+}
+

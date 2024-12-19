@@ -143,6 +143,38 @@
     </section>
     
     <script>
+		document.addEventListener('DOMContentLoaded', () => {
+		    const today = new Date();
+		    today.setHours(0, 0, 0, 0); // Normalize today's date to midnight
+
+		    const rows = document.querySelectorAll('table.action-list tbody tr');
+
+		    rows.forEach(row => {
+		        const dueDateCell = row.querySelector('td:nth-child(4)'); // 4th column for Due Date
+		        if (dueDateCell && dueDateCell.textContent.trim()) {
+		            const dueDateString = dueDateCell.textContent.trim();
+
+		            // Parse the due date as "YYYY-MM-DD"
+		            const [year, month, day] = dueDateString.split('-').map(Number);
+		            const dueDate = new Date(year, month - 1, day); // Month is 0-based in JavaScript
+
+		            if (!isNaN(dueDate.getTime())) { // Ensure the date is valid
+		                dueDate.setHours(0, 0, 0, 0); // Normalize due date to midnight
+
+		                // Apply classes based on the due date comparison
+		                if (dueDate < today) {
+		                    row.classList.add('past-due'); // Add class for overdue items
+		                } else if (dueDate.getTime() === today.getTime()) {
+		                    row.classList.add('due-today'); // Add class for items due today
+		                } else {
+		                    row.classList.add('future-due'); // Add class for future items
+		                }
+		            }
+		        }
+		    });
+		});
+		
+		
 		// Fetch Monthly Action Items Dynamically
 		document.getElementById('fetchButton').addEventListener('click', function () {
 		    const status = document.getElementById('status').value;
@@ -248,7 +280,8 @@
 		    const fetchSection = document.querySelector('.grid-container');
 		    fetchSection.style.display = fetchSection.style.display === 'none' ? 'block' : 'none';
 		});
-
+ 
+				
 		function toggleUpdates(taskId) {
 		    const updateSection = document.getElementById(`update-section-${taskId}`);
 		    updateSection.style.display = updateSection.style.display === 'none' ? 'block' : 'none';
