@@ -191,80 +191,91 @@
         endDateInput.value = todayString;
 
         // Fetch and render charts
-        async function fetchChartData(startDate = null, endDate = null) {
-            try {
-                const url = new URL("/task-data", window.location.origin);
-                if (startDate) url.searchParams.append('start_date', startDate);
-                if (endDate) url.searchParams.append('end_date', endDate);
+		// Fetch and render charts
+		async function fetchChartData(startDate = null, endDate = null) {
+		    try {
+		        const url = new URL("/task-data", window.location.origin);
+		        if (startDate) url.searchParams.append('start_date', startDate);
+		        if (endDate) url.searchParams.append('end_date', endDate);
 
-                const response = await fetch(url);
-                const data = await response.json();
+		        const response = await fetch(url);
+		        const data = await response.json();
 
-                // Destroy existing chart instance before re-rendering
-                const existingChart = Chart.getChart('priorityChart');
-                if (existingChart) existingChart.destroy();
+		        // Destroy existing chart instance before re-rendering
+		        const existingChart = Chart.getChart('priorityChart');
+		        if (existingChart) existingChart.destroy();
 
-                // Enhance Priority vs Progress Chart
-                const ctxPriority = document.getElementById('priorityChart').getContext('2d');
-                new Chart(ctxPriority, {
-                    type: 'bar',
-                    data: {
-                        labels: data.tasks.map((_, index) => `Task ${index + 1}`), // Use task indices instead of descriptions
-                        datasets: [{
-                            label: 'Task Progress (%)',
-                            data: data.tasks.map(task => task.progress),
-                            backgroundColor: data.tasks.map(task => {
-                                if (task.priority === 'High') return 'rgba(255, 99, 132, 0.8)'; // Red
-                                if (task.priority === 'Medium') return 'rgba(255, 205, 86, 0.8)'; // Yellow
-                                return 'rgba(75, 192, 192, 0.8)'; // Green
-                            }),
-                            borderColor: data.tasks.map(task => {
-                                if (task.priority === 'High') return 'rgba(255, 99, 132, 1)';
-                                if (task.priority === 'Medium') return 'rgba(255, 205, 86, 1)';
-                                return 'rgba(75, 192, 192, 1)';
-                            }),
-                            borderWidth: 1
-                        }]
-                    },
-                    options: {
-                        responsive: true,
-                        plugins: {
-                            title: {
-                                display: true,
-                                text: 'Task Priority and Progress Overview',
-                                font: {
-                                    size: 14
-                                }
-                            },
-                            tooltip: {
-                                callbacks: {
-                                    label: function (context) {
-                                        const task = data.tasks[context.dataIndex];
-                                        return `${task.name}: Priority - ${task.priority}, Progress - ${task.progress}%`;
-                                    }
-                                }
-                            }
-                        },
-                        scales: {
-                            x: {
-                                ticks: {
-                                    font: {
-                                        size: 14
-                                    }
-                                }
-                            },
-                            y: {
-                                beginAtZero: true,
-                                max: 100,
-                                ticks: {
-                                    font: {
-                                        size: 14
-                                    }
-                                }
-                            }
-                        }
-                    }
-                });
+		        // Enhance Priority vs Progress Chart
+		        const ctxPriority = document.getElementById('priorityChart').getContext('2d');
+		        new Chart(ctxPriority, {
+		            type: 'bar',
+		            data: {
+		                labels: data.tasks.map((task, index) => `Task ${index + 1}`), // Use task indices instead of descriptions
+		                datasets: [{
+		                    label: 'Task Progress (%)',
+		                    data: data.tasks.map(task => task.progress),
+		                    backgroundColor: data.tasks.map(task => {
+		                        if (task.priority === 'High') return 'rgba(255, 99, 132, 0.8)'; // Red
+		                        if (task.priority === 'Medium') return 'rgba(255, 205, 86, 0.8)'; // Yellow
+		                        return 'rgba(75, 192, 192, 0.8)'; // Green
+		                    }),
+		                    borderColor: data.tasks.map(task => {
+		                        if (task.priority === 'High') return 'rgba(255, 99, 132, 1)';
+		                        if (task.priority === 'Medium') return 'rgba(255, 205, 86, 1)';
+		                        return 'rgba(75, 192, 192, 1)';
+		                    }),
+		                    borderWidth: 1,
+		                    hoverBackgroundColor: data.tasks.map(task => {
+		                        if (task.priority === 'High') return 'rgba(255, 99, 132, 1)'; // Red
+		                        if (task.priority === 'Medium') return 'rgba(255, 205, 86, 1)'; // Yellow
+		                        return 'rgba(75, 192, 192, 1)'; // Green
+		                    }),
+		                    hoverBorderColor: data.tasks.map(task => {
+		                        if (task.priority === 'High') return 'rgba(255, 99, 132, 1)';
+		                        if (task.priority === 'Medium') return 'rgba(255, 205, 86, 1)';
+		                        return 'rgba(75, 192, 192, 1)';
+		                    })
+		                }]
+		            },
+		            options: {
+		                responsive: true,
+		                plugins: {
+		                    title: {
+		                        display: true,
+		                        text: 'Task Priority and Progress Overview',
+		                        font: {
+		                            size: 14
+		                        }
+		                    },
+		                    tooltip: {
+		                        callbacks: {
+		                            label: function (context) {
+		                                const task = data.tasks[context.dataIndex];
+		                                return `${task.name}: Priority - ${task.priority}, Progress - ${task.progress}%`;
+		                            }
+		                        }
+		                    }
+		                },
+		                scales: {
+		                    x: {
+		                        ticks: {
+		                            font: {
+		                                size: 14
+		                            }
+		                        }
+		                    },
+		                    y: {
+		                        beginAtZero: true,
+		                        max: 100,
+		                        ticks: {
+		                            font: {
+		                                size: 14
+		                            }
+		                        }
+		                    }
+		                }
+		            }
+		        });
 
 				// Enhanced Due Date Progress Bars
 				const progressBars = document.getElementById('progressBars');
