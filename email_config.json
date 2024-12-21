@@ -2,39 +2,7 @@
     "users": [
         {
             "name": "Solomon",
-            "email": "solomonal@ethiopianairlines.com"
-        },
-        {
-            "name": "Demis",
-            "email": "demisb@ethiopianairlines.com"
-        },
-        {
-            "name": "sol",
             "email": "solomonakb@gmail.com"
-        },
-        {
-            "name": "Fiseha ",
-            "email": "fisehata@ethiopianairlines.com"
-        },
-        {
-            "name": "Brhane ",
-            "email": "brhanet@ethiopianairlines.com"
-        },
-        {
-            "name": "Emnet",
-            "email": "Emnett@ethiopianairlines.com"
-        },
-        {
-            "name": "PolikH",
-            "email": "polikh@ethiopianairlines.com"
-        },
-        {
-            "name": "Solomon ",
-            "email": "Solomonal@ethiopianairlines.com"
-        },
-        {
-            "name": "Dawit",
-            "email": "dawitng@ethiopianairlines.com"
         }
     ]
 }

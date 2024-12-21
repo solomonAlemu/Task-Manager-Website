@@ -5,7 +5,10 @@ from datetime import datetime
 import json
 import bcrypt
 import re
- 
+from email_config import EmailManager
+import json
+
+email_manager = EmailManager()
 class UserApp:
     def __init__(self):
         self.app = Flask(__name__)
@@ -107,7 +110,7 @@ class UserApp:
             email = request.form.get('email', '').strip().lower()
             password = request.form.get('password', '')
             confirm_password = request.form.get('confirm_password', '')
-
+            result = email_manager.add_user(username, email)
             # Validate input
             if not username or not email or not password:
                 return jsonify({

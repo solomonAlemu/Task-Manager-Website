@@ -19,6 +19,7 @@ from flask import send_file
 import csv
 from io import StringIO
 from io import BytesIO, TextIOWrapper
+from flask import flash
 
 # Initialize Flask app
 app = Flask(__name__)
@@ -52,27 +53,60 @@ def init_db():
     """Initialize the database and create tables if they don't exist."""
     with sqlite3.connect(DATABASE) as conn:
         cursor = conn.cursor()
-        # Tasks Table (add user_id column)
+
+        # First, create the user_roles table since other tables depend on it
         cursor.execute('''
-        CREATE TABLE IF NOT EXISTS tasks (
+        CREATE TABLE IF NOT EXISTS user_roles (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
-            user_id INTEGER NOT NULL,
-            assigned_person TEXT DEFAULT NULL,
-            description TEXT NOT NULL,
-            priority TEXT NOT NULL,
-            status TEXT NOT NULL DEFAULT 'Open',
-            percentage_completion INTEGER DEFAULT 0 CHECK(percentage_completion BETWEEN 0 AND 100),
-            notes TEXT DEFAULT '',
-            updates TEXT DEFAULT '',
-            due_date TEXT DEFAULT NULL,
-            monthly_action_id INTEGER,
-            created_at TEXT DEFAULT (DATETIME('now', 'localtime')),
-            FOREIGN KEY(user_id) REFERENCES users(id),
-            FOREIGN KEY(monthly_action_id) REFERENCES monthly_action_items(id)
+            role_name TEXT NOT NULL UNIQUE,
+            role_level INTEGER NOT NULL,
+            can_approve_from INTEGER,
+            reports_to INTEGER,
+            FOREIGN KEY(can_approve_from) REFERENCES user_roles(id),
+            FOREIGN KEY(reports_to) REFERENCES user_roles(id)
         )
         ''')
 
-        # Monthly Action Items Table (add user_id column)
+        # Insert default roles if they don't exist
+        cursor.execute('''
+        INSERT OR IGNORE INTO user_roles (role_name, role_level, reports_to) 
+        VALUES 
+            ('Managing Director', 1, NULL),
+            ('Director', 2, 1),
+            ('Manager', 3, 2),
+            ('Team Leader', 4, 3),
+            ('Employee', 5, 4)
+        ''')
+
+        # Create users table with department column
+        cursor.execute('''
+        CREATE TABLE IF NOT EXISTS users (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            username TEXT UNIQUE NOT NULL,
+            email TEXT UNIQUE NOT NULL,
+            password_hash TEXT NOT NULL,
+            created_at TEXT DEFAULT (DATETIME('now', 'localtime')),
+            last_login TEXT DEFAULT NULL,
+            is_active INTEGER DEFAULT 1,
+            role TEXT DEFAULT 'Employee',
+            department TEXT,
+            FOREIGN KEY(role) REFERENCES user_roles(role_name)
+        )
+        ''')
+
+        # Password reset tokens table
+        cursor.execute('''
+        CREATE TABLE IF NOT EXISTS password_reset_tokens (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            user_id INTEGER NOT NULL,
+            token TEXT NOT NULL UNIQUE,
+            expires_at TEXT NOT NULL,
+            used INTEGER DEFAULT 0,
+            FOREIGN KEY(user_id) REFERENCES users(id)
+        )
+        ''')
+
+        # Monthly action items table
         cursor.execute('''
         CREATE TABLE IF NOT EXISTS monthly_action_items (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -87,34 +121,35 @@ def init_db():
             FOREIGN KEY(user_id) REFERENCES users(id)
         )
         ''')
-  
+
+        # Tasks table with approval workflow
         cursor.execute('''
-        CREATE TABLE IF NOT EXISTS users (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            username TEXT UNIQUE NOT NULL,
-            email TEXT UNIQUE NOT NULL,
-            password_hash TEXT NOT NULL,
-            created_at TEXT DEFAULT (DATETIME('now', 'localtime')),
-            last_login TEXT DEFAULT NULL,
-            is_active INTEGER DEFAULT 1,
-            role TEXT DEFAULT 'user'
-        )
-        ''')
-        
-        # Password Reset Tokens table
-        cursor.execute('''
-        CREATE TABLE IF NOT EXISTS password_reset_tokens (
+        CREATE TABLE IF NOT EXISTS tasks (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             user_id INTEGER NOT NULL,
-            token TEXT NOT NULL UNIQUE,
-            expires_at TEXT NOT NULL,
-            used INTEGER DEFAULT 0,
-            FOREIGN KEY(user_id) REFERENCES users(id)
+            assigned_person TEXT DEFAULT NULL,
+            description TEXT NOT NULL,
+            priority TEXT NOT NULL,
+            status TEXT NOT NULL DEFAULT 'Open',
+            percentage_completion INTEGER DEFAULT 0 CHECK(percentage_completion BETWEEN 0 AND 100),
+            notes TEXT DEFAULT '',
+            updates TEXT DEFAULT '',
+            due_date TEXT DEFAULT NULL,
+            monthly_action_id INTEGER,
+            created_at TEXT DEFAULT (DATETIME('now', 'localtime')),
+            assigned_by INTEGER,
+            requires_approval INTEGER DEFAULT 0,
+            approved_by INTEGER DEFAULT NULL,
+            approval_status TEXT DEFAULT 'Pending',
+            FOREIGN KEY(user_id) REFERENCES users(id),
+            FOREIGN KEY(monthly_action_id) REFERENCES monthly_action_items(id),
+            FOREIGN KEY(assigned_by) REFERENCES users(id),
+            FOREIGN KEY(approved_by) REFERENCES users(id)
         )
         ''')
-                
-        conn.commit()
 
+        # Commit all changes
+        conn.commit()
 # Initialize the database if not already done
 if not os.path.exists(DATABASE):
     init_db()
@@ -131,6 +166,43 @@ scheduler.add_job(func=cleanup_expired_tokens, trigger='interval', hours=1)
 
 # Start the scheduler
 scheduler.start()
+
+def get_user_role(user_id):
+    """Get the role of a user."""
+    with get_db_connection() as conn:
+        cursor = conn.cursor()
+        cursor.execute('SELECT role FROM users WHERE id = ?', (user_id,))
+        result = cursor.fetchone()
+        return result[0] if result else None
+
+def can_approve_task(approver_id, task_id):
+    """Check if a user can approve a task."""
+    with get_db_connection() as conn:
+        cursor = conn.cursor()
+        cursor.execute('''
+            SELECT u1.role as approver_role, u2.role as assignee_role
+            FROM users u1, users u2, tasks t
+            WHERE u1.id = ? AND u2.id = t.user_id AND t.id = ?
+        ''', (approver_id, task_id))
+        roles = cursor.fetchone()
+        if not roles:
+            return False
+        
+        # Check role hierarchy
+        cursor.execute('''
+            SELECT r1.role_level < r2.role_level
+            FROM user_roles r1, user_roles r2
+            WHERE r1.role_name = ? AND r2.role_name = ?
+        ''', (roles[0], roles[1]))
+        return cursor.fetchone()[0]
+
+# Add this template context processor
+@app.context_processor
+def utility_processor():
+    return {
+        'current_user_can_approve': lambda task_id: can_approve_task(session.get('user_id'), task_id),
+        'get_user_role': lambda user_id: get_user_role(user_id)
+    }
  
 @app.route('/')
 def home():
@@ -147,16 +219,20 @@ def home():
             # Fetch tasks for the logged-in user
             cursor.execute("""
                 SELECT 
-                    tasks.id, tasks.assigned_person, tasks.description, tasks.priority, tasks.status, 
-                    tasks.percentage_completion, tasks.notes, tasks.updates, 
-                    tasks.due_date, monthly_action_items.description AS monthly_action_description
+                    tasks.id, tasks.assigned_person, tasks.description, tasks.priority, tasks.status,
+                    tasks.percentage_completion, tasks.notes, tasks.updates, tasks.due_date,
+                    tasks.assigned_by, tasks.approval_status,
+                    monthly_action_items.description AS monthly_action_description,
+                    u.username AS assigned_by_name, tasks.requires_approval
                 FROM tasks
-                LEFT JOIN monthly_action_items
-                ON tasks.monthly_action_id = monthly_action_items.id
-                WHERE tasks.user_id = ? AND tasks.status NOT IN ('Completed', 'Cancelled')
-            """, (user_id,))
-            tasks = cursor.fetchall()
+                LEFT JOIN users u ON tasks.assigned_by = u.id
+                LEFT JOIN monthly_action_items ON tasks.monthly_action_id = monthly_action_items.id
+                WHERE (tasks.user_id = ? OR tasks.assigned_by = ?)
+                AND (tasks.status NOT IN ('Completed', 'Cancelled') OR tasks.approval_status != 'approved')
+            """, (user_id, user_id))
 
+            tasks = cursor.fetchall()
+            
             # Fetch monthly action items for task creation dropdown
             cursor.execute("""
                 SELECT id, description, priority 
@@ -164,38 +240,293 @@ def home():
                 WHERE user_id = ? AND status IN ('Open', 'In Progress')
             """, (user_id,))
             monthly_actions = cursor.fetchall()
-
-        return render_template('Home.html', tasks=tasks, monthly_actions=monthly_actions)
+            cursor.execute('SELECT username FROM users WHERE id = ?', (user_id,))
+            current_user = cursor.fetchone()['username']
+        return render_template('Home.html', tasks=tasks, monthly_actions=monthly_actions, current_user=current_user)
     except sqlite3.Error as e:
         print(f"Database error: {e}")
         return f"An error occurred: {e}", 500
 
-# Modify add_task route to support monthly action item linking
+# Add these new routes to server.py
+
+@app.route('/assign-task', methods=['POST'])
+def assign_task():
+    if 'user_id' not in session:
+        return jsonify({"success": False, "error": "Unauthorized"}), 401
+    
+    assigner_id = session['user_id']
+    assignee_id = request.form.get('assignee_id')
+    description = request.form.get('description')
+    priority = request.form.get('priority', 'Medium')
+    due_date = request.form.get('due_date')
+    
+    try:
+        with get_db_connection() as conn:
+            cursor = conn.cursor()
+            
+            # Get assigner's role
+            cursor.execute('''
+                SELECT role FROM users WHERE id = ?
+            ''', (assigner_id,))
+            assigner_role = cursor.fetchone()[0]
+            
+            # Get assignee's role
+            cursor.execute('''
+                SELECT role FROM users WHERE id = ?
+            ''', (assignee_id,))
+            assignee_role = cursor.fetchone()[0]
+            
+            # Check if assignment is allowed based on hierarchy
+            cursor.execute('''
+                SELECT r1.role_level as assigner_level, r2.role_level as assignee_level
+                FROM user_roles r1, user_roles r2
+                WHERE r1.role_name = ? AND r2.role_name = ?
+            ''', (assigner_role, assignee_role))
+            
+            levels = cursor.fetchone()
+            if not levels or levels[0] >= levels[1]:
+                return jsonify({"success": False, "error": "Invalid task assignment hierarchy"}), 403
+            
+            # Create the task
+            cursor.execute('''
+                INSERT INTO tasks (
+                    user_id, assigned_person, description, priority, 
+                    due_date, assigned_by, requires_approval
+                ) VALUES (?, ?, ?, ?, ?, ?, 1)
+            ''', (assignee_id, request.form.get('assigned_person'), description, 
+                 priority, due_date, assigner_id))
+            
+            conn.commit()
+            return jsonify({"success": True, "message": "Task assigned successfully"})
+            
+    except sqlite3.Error as e:
+        print(f"Database error: {e}")
+        return jsonify({"success": False, "error": "Database error"}), 500
+
+from flask import flash, redirect, url_for
+
+@app.route('/approve-task/<int:task_id>', methods=['POST'])
+def approve_task(task_id):
+    """Approve or reject an approval request for a task from the task assigner."""
+    if 'user_id' not in session:
+        flash("Unauthorized: Please log in to approve or reject tasks.", "error")
+        return redirect(url_for('login'))
+    
+    approver_id = session['user_id']
+    approval_status = request.form.get('status')  # 'approved' or 'rejected'
+    
+    try:
+        with get_db_connection() as conn:
+            cursor = conn.cursor()
+            
+            # Check if the logged-in user is the task assigner
+            cursor.execute('''
+                SELECT id
+                FROM tasks
+                WHERE id = ? AND assigned_by = ?
+            ''', (task_id, approver_id))
+            
+            task = cursor.fetchone()
+            if not task:
+                flash("Error: Task not found or you do not have permission to approve/reject it.", "error")
+                return redirect(url_for('home'))
+                
+            # Update task approval status
+            cursor.execute('''
+                UPDATE tasks 
+                SET approval_status = ?, approved_by = ?
+                WHERE id = ?
+            ''', (approval_status, approver_id, task_id))
+            
+            conn.commit()
+            flash(f"Task {approval_status}.", "success")
+            return redirect(url_for('home'))
+            
+    except sqlite3.Error as e:
+        print(f"Database error: {e}")
+        flash("Error: Database error occurred.", "error")
+        return redirect(url_for('home'))
+
+@app.route('/request_approval/<int:task_id>', methods=['POST'])
+def request_approval(task_id):
+    """Request status update for a task from the task assigner."""
+    if 'user_id' not in session:
+        flash("Unauthorized: Please log in to request a status update.", "error")
+        return redirect(url_for('login'))
+
+    user_id = session['user_id']
+    try:
+        with get_db_connection() as conn:
+            cursor = conn.cursor()
+
+            # Verify that the task is assigned to the current user
+            cursor.execute('''
+                SELECT id, assigned_by
+                FROM tasks
+                WHERE id = ? AND user_id = ?
+            ''', (task_id, user_id))
+            task = cursor.fetchone()
+
+            if not task:
+                flash("Error: Task not found or you do not have permission to request an update.", "error")
+                return redirect(url_for('home'))
+
+            # Set requires_approval to 1 and notify the task assigner
+            assigned_by = task[1]
+            cursor.execute('''
+                UPDATE tasks
+                SET requires_approval = 1
+                WHERE id = ?
+            ''', (task_id,))
+            conn.commit()
+
+            flash("Approval request sent to the task assigner.", "success")
+        return redirect(url_for('home'))
+    except sqlite3.Error as e:
+        print(f"Database error: {e}")
+        flash("Error: Unable to send approval request.", "error")
+        return redirect(url_for('home'))
+ 
+@app.route('/request-status-update/<int:task_id>', methods=['POST'])
+
+def request_status_update(task_id):
+
+    """Request a status update for a specific task from the task assigner."""
+
+    if 'user_id' not in session:
+        flash("Unauthorized: Please log in to request a status update.", "error")
+        return redirect(url_for('login'))
+    
+    approver_id = session['user_id']
+    approval_status = "Status Update Required"
+    
+    try:
+        with get_db_connection() as conn:
+            cursor = conn.cursor()
+            
+            # Check if the logged-in user is the task assigner
+            cursor.execute('''
+                SELECT id
+                FROM tasks
+                WHERE id = ? AND assigned_by = ?
+            ''', (task_id, approver_id))
+            
+            task = cursor.fetchone()
+
+            if not task:
+                flash("Error: Task not found or you do not have permission to approve/reject it.", "error")
+                return redirect(url_for('home'))
+
+            # Update the task to indicate a status update request
+            cursor.execute('''
+                UPDATE tasks 
+                SET approval_status = ?, approved_by = ?
+                WHERE id = ?
+            ''', (approval_status, approver_id, task_id))
+            
+            conn.commit()
+
+            flash("Status update request sent to the task assignee.", "success")
+        return redirect(url_for('home'))
+    except sqlite3.Error as e:
+        print(f"Database error: {e}")
+        flash("Error: Unable to send status update request.", "error")
+        return redirect(url_for('home'))
+
+
+
 @app.route('/add', methods=['POST'])
 def add_task():
-    """Add a new task for the logged-in user."""
+    """Add a new task with optional monthly action item link."""
     if 'user_id' not in session:
         return redirect(url_for('login'))
+
     user_id = session['user_id']  # Get logged-in user's ID
-
-
-    """Add a new task with optional monthly action item link."""
-
-    assigned_person = request.form.get('assigned_person')
     description = request.form.get('description', '').strip()
     priority = request.form.get('priority', 'Medium')
     due_date = request.form.get('due_date', '').strip()
     monthly_action_id = request.form.get('monthly_action_id')
+    recipients = request.form.get('recipients', '[]')  # Get recipients JSON
+
+    # Debug: Log form data and recipients
+    print("Form Data:", request.form)
+    print("Recipients JSON:", recipients)
+
+    # Parse recipients
+    try:
+        recipients = json.loads(recipients)
+        # Convert the list of names into a comma-separated string
+        assigned_person = ", ".join(recipient['name'] for recipient in recipients)
+    except json.JSONDecodeError:
+        assigned_person = ""  # Default to empty string if invalid JSON
+
     if not description:
         return "Error: Task description cannot be empty!", 400
 
     try:
         with get_db_connection() as conn:
             cursor = conn.cursor()
-            cursor.execute("""
-                INSERT INTO tasks (user_id, assigned_person, description, priority, due_date, status, monthly_action_id)
-                VALUES (?,?,?, ?, ?, 'Open', ?)
-            """, (user_id, assigned_person, description, priority, due_date, monthly_action_id))
+            # Retrieve assignee_id from assigned_person reference
+            if assigned_person:
+                cursor.execute(
+                    "SELECT id FROM users WHERE username = ?",
+                    (assigned_person,)
+                )
+                assignee_row = cursor.fetchone()
+                if not assignee_row:
+                    return "Error: Assigned person not found!", 400
+                assignee_id = assignee_row[0]
+            else:
+                assignee_id = None
+
+            # Check task assignment hierarchy if assignee_id is provided
+            if assignee_id:
+                # Get assigner's role
+                cursor.execute(
+                    "SELECT role FROM users WHERE id = ?",
+                    (user_id,)
+                )
+                assigner_role = cursor.fetchone()[0]
+
+                # Get assignee's role
+                cursor.execute(
+                    "SELECT role FROM users WHERE id = ?",
+                    (assignee_id,)
+                )
+                assignee_role = cursor.fetchone()[0]
+
+                # Check if assignment is allowed based on hierarchy
+                cursor.execute(
+                    """
+                    SELECT r1.role_level as assigner_level, r2.role_level as assignee_level
+                    FROM user_roles r1, user_roles r2
+                    WHERE r1.role_name = ? AND r2.role_name = ?
+                    """,
+                    (assigner_role, assignee_role),
+                )
+                levels = cursor.fetchone()
+                if not levels or levels[0] > levels[1]:
+                    return "Error: Invalid task assignment hierarchy", 403
+
+            # Insert the task into the database
+            cursor.execute(
+                """
+                INSERT INTO tasks (
+                    user_id, assigned_person, description, priority, due_date, 
+                    status, monthly_action_id, assigned_by, requires_approval
+                ) VALUES (?, ?, ?, ?, ?, 'Open', ?, ?, ?)
+                """,
+                (
+                    assignee_id if assignee_id else user_id,
+                    assigned_person,
+                    description,
+                    priority,
+                    due_date,
+                    monthly_action_id,
+                    user_id,
+                    1 if assignee_id else 0,  # Requires approval if assigned to someone else
+                ),
+            )
             conn.commit()
 
         return redirect(url_for('home'))
@@ -246,7 +577,7 @@ def update_task(task_id):
                 return "Error: Task not found or unauthorized.", 404
             current_assigned_person, current_description, current_priority, current_status,current_percentage, current_updates, current_due_date, current_monthly_action_id = task
             # Append new notes to updates
-            update_entry = (
+            update_entry = (10
                 (current_updates or "") +
                 f"\n\n== Update ({datetime.now().strftime('%Y-%m-%d %H:%M')})\n"
                 f"{notes or 'No notes'} | Status: {status}\n"
@@ -286,6 +617,7 @@ def update_task(task_id):
 def delete_task(task_id):
     """Delete a specific task for the logged-in user."""
     if 'user_id' not in session:
+        flash("You need to be logged in to delete tasks.", "error")
         return redirect(url_for('login'))
 
     user_id = session['user_id']
@@ -293,13 +625,31 @@ def delete_task(task_id):
     try:
         with get_db_connection() as conn:
             cursor = conn.cursor()
-            cursor.execute("DELETE FROM tasks WHERE id = ? AND user_id = ?", (task_id, user_id))
+            
+            # Check if the logged-in user is the one who assigned the task or the assigner no longer exists
+            cursor.execute("""
+                SELECT t.id, u.id as assigner_id
+                FROM tasks t
+                LEFT JOIN users u ON t.assigned_by = u.id
+                WHERE t.id = ? AND (t.assigned_by = ? OR u.id IS NULL)
+            """, (task_id, user_id))
+            task = cursor.fetchone()
+            
+            if not task:
+                flash("Error: Task not found or you do not have permission to delete it.", "error")
+                return redirect(url_for('home'))
+            
+            # Delete the task
+            cursor.execute("DELETE FROM tasks WHERE id = ?", (task_id,))
             conn.commit()
 
+        flash("Task deleted successfully.", "success")
         return redirect(url_for('home'))
     except sqlite3.Error as e:
         print(f"Database error: {e}")
-        return "Error: Unable to delete task.", 500
+        flash("Error: Unable to delete task.", "error")
+        return redirect(url_for('home'))
+
  
 @app.route('/fetch', methods=['GET'])
 def fetch_tasks():
@@ -1188,23 +1538,69 @@ def email_management():
 @app.route('/signup', methods=['GET', 'POST'])
 def signup():
     if request.method == 'POST':
-        username = request.form['username']
-        email = request.form['email']
-        password = request.form['password']
+        username = request.form.get('username')
+        email = request.form.get('email')
+        password = request.form.get('password')
+        role = request.form.get('role')
+        department = request.form.get('department')
+    
+        # Validate required fields
+        if not all([username, email, password, role, department]):
+            result = email_manager.add_user(username, email)
+            return jsonify(success=False, message='All required fields must be filled')
+        
+        # Validate email format
+        if not re.match(r"[^@]+@[^@]+\.[^@]+", email):
+            return jsonify(success=False, message='Invalid email format')
 
+        # Validate password strength
+        if not re.match(r"^(?=.*[A-Za-z])(?=.*\d)[A-Za-z\d]{8,}$", password):
+            return jsonify(success=False, 
+                           message='Password must be at least 8 characters long and include both letters and numbers')
+
+        # Hash password
         password_hash = bcrypt.hashpw(password.encode('utf-8'), bcrypt.gensalt())
 
-        with get_db_connection() as conn:
-            try:
+        try:
+            with get_db_connection() as conn:
                 cursor = conn.cursor()
-                cursor.execute('''INSERT INTO users (username, email, password_hash) VALUES (?, ?, ?)''',
-                               (username, email, password_hash))
-                conn.commit()
-                return jsonify(success=True, message='Account created successfully.', redirect=url_for('login'))
-            except sqlite3.IntegrityError:
-                return jsonify(success=False, message='Username or email already exists.')
-    return render_template('signup.html')
+                
+                # Check if username or email already exists
+                cursor.execute('SELECT id FROM users WHERE username = ? OR email = ?', (username, email))
+                if cursor.fetchone():
+                    return jsonify(success=False, message='Username or email already exists')
 
+                # Verify role exists in user_roles table
+                cursor.execute('SELECT role_name FROM user_roles WHERE role_name = ?', (role,))
+                if not cursor.fetchone():
+                    return jsonify(success=False, message='Invalid role selected')
+
+                # Insert new user with role and department
+                cursor.execute('''
+                    INSERT INTO users (username, email, password_hash, role, department)
+                    VALUES (?, ?, ?, ?, ?)
+                ''', (username, email, password_hash, role, department))
+                
+                conn.commit()
+                
+                return jsonify(success=True, 
+                               message=f'Account created successfully as {role}',
+                               redirect=url_for('login'))
+
+        except sqlite3.Error as e:
+            print(f"Database error: {e}")
+            return jsonify(success=False, message='An error occurred while creating your account')
+
+    # GET method - return available roles for the signup form
+    try:
+        with get_db_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute('SELECT role_name FROM user_roles ORDER BY role_level')
+            roles = [row[0] for row in cursor.fetchall()]
+            return render_template('signup.html', roles=roles)
+    except sqlite3.Error as e:
+        print(f"Database error: {e}")
+        return render_template('signup.html', roles=['Employee'])  # Fallback to basic role
 
 @app.route('/reset-password', methods=['GET', 'POST'])
 def reset_password():
@@ -1330,16 +1726,23 @@ def reset_password_confirm(token):
             print(f"Database error: {e}")
             return jsonify(success=False, message="An internal error occurred. Please try again later."), 500
 
-    
 @app.route('/api/users', methods=['GET', 'POST'])
 def manage_users():
     if request.method == 'GET':
         try:
             with get_db_connection() as conn:
                 cursor = conn.cursor()
-                cursor.execute('SELECT id, username, email, role FROM users')
+                cursor.execute('SELECT id, username, email, role, department FROM users')
                 users = cursor.fetchall()
-                return jsonify({"users": [dict(user) for user in users]})
+                return jsonify({"users": [
+                    {
+                        "id": user[0],
+                        "username": user[1],
+                        "email": user[2],
+                        "role": user[3],
+                        "department": user[4]
+                    } for user in users
+                ]})
         except sqlite3.Error as e:
             print(f"Database error: {e}")
             return jsonify({"error": "Unable to fetch users."}), 500
@@ -1349,17 +1752,20 @@ def manage_users():
         email = request.form.get('email')
         password = request.form.get('password')
         role = request.form.get('role', 'user')
+        department = request.form.get('department')
         
-        if not username or not email or not password:
+        if not username or not email or not password or not department:
             return jsonify({"error": "All fields are required."}), 400
-        
+        result = email_manager.add_user(username, email)
         password_hash = bcrypt.hashpw(password.encode('utf-8'), bcrypt.gensalt())
         
         try:
             with get_db_connection() as conn:
                 cursor = conn.cursor()
-                cursor.execute('INSERT INTO users (username, email, password_hash, role) VALUES (?, ?, ?, ?)', 
-                               (username, email, password_hash, role))
+                cursor.execute(
+                    'INSERT INTO users (username, email, password_hash, role, department) VALUES (?, ?, ?, ?, ?)', 
+                    (username, email, password_hash, role, department)
+                )
                 conn.commit()
             return jsonify({"message": "User added successfully."}), 201
         except sqlite3.IntegrityError:
@@ -1373,52 +1779,75 @@ def delete_user(user_id):
     try:
         with get_db_connection() as conn:
             cursor = conn.cursor()
+            
+            # Fetch the username and email of the user to be deleted
+            cursor.execute('SELECT username, email FROM users WHERE id = ?', (user_id,))
+            user = cursor.fetchone()
+            
+            if not user:
+                return jsonify({"error": "User not found."}), 404
+
+            username, email = user
+
+            # Delete the user from the email manager
+            result = email_manager.delete_user( email)
+
+            # Delete the user from the database
             cursor.execute('DELETE FROM users WHERE id = ?', (user_id,))
             conn.commit()
-            if cursor.rowcount == 0:
-                return jsonify({"error": "User not found."}), 404
+
             return jsonify({"message": "User deleted successfully."}), 200
     except sqlite3.Error as e:
         print(f"Database error: {e}")
         return jsonify({"error": "Unable to delete user."}), 500
+
+ 
 @app.route('/api/users/<int:user_id>', methods=['GET', 'PUT'])
 def user_info(user_id):
     """Get and edit user info."""
     if request.method == 'GET':
         # Fetch the user info
-        conn = sqlite3.connect(DATABASE)
-        cursor = conn.cursor()
-        cursor.execute("SELECT id, username, email, role FROM users WHERE id = ?", (user_id,))
-        user = cursor.fetchone()
-        conn.close()
+        try:
+            with get_db_connection() as conn:
+                cursor = conn.cursor()
+                cursor.execute("SELECT id, username, email, role, department FROM users WHERE id = ?", (user_id,))
+                user = cursor.fetchone()
+                
+                if user:
+                    return jsonify({"success": True, "user": {
+                        "id": user[0],
+                        "username": user[1],
+                        "email": user[2],
+                        "role": user[3],
+                        "department": user[4]
+                    }})
 
-        if user:
-            return jsonify({"success": True, "user": {
-                "id": user[0],
-                "username": user[1],
-                "email": user[2],
-                "role": user[3]
-            }})
-        else:
-            return jsonify({"success": False, "message": "User not found"}), 404
+                else:
+                    return jsonify({"success": False, "message": "User not found"}), 404
+        except sqlite3.Error as e:
+            print(f"Database error: {e}")
+            return jsonify({"success": False, "message": "Database error occurred"}), 500
 
     if request.method == 'PUT':
         # Update the user info
-        username = request.form['username']
-        email = request.form['email']
-        role = request.form['role']
-
+        username = request.form.get('username')
+        email = request.form.get('email')
+        role = request.form.get('role')
+        department = request.form.get('department')
+        if not all([username, email, role, department]):
+            return jsonify({"error": "All fields are required."}), 400
+        result = email_manager.update_user(username, email)
+        if not result:
+            result = email_manager.add_user(username, email)      
         try:
-            conn = sqlite3.connect(DATABASE)
-            cursor = conn.cursor()
-            cursor.execute("""
-                UPDATE users
-                SET username = ?, email = ?, role = ?
-                WHERE id = ?
-            """, (username, email, role, user_id))
-            conn.commit()
-            conn.close()
-
+            with get_db_connection() as conn:
+                cursor = conn.cursor()
+                cursor.execute("""
+                    UPDATE users
+                    SET username = ?, email = ?, role = ?, department = ?
+                    WHERE id = ?
+                """, (username, email, role, department, user_id))
+                conn.commit()
             return jsonify({"success": True, "message": "User info updated successfully"})
 
         except sqlite3.Error as e:
@@ -1456,13 +1885,30 @@ def logout():
 def user_management():
     return render_template('user_management.html')
 
+# Add this function to server.py
+def add_department_column():
+    try:
+        with sqlite3.connect(DATABASE) as conn:
+            cursor = conn.cursor()
+            # Add department column if it doesn't exist
+            cursor.execute('''
+                PRAGMA foreign_keys=off;
+                BEGIN TRANSACTION;
+                ALTER TABLE users ADD COLUMN department TEXT;
+                COMMIT;
+                PRAGMA foreign_keys=on;
+            ''')
+            print("Successfully added department column")
+    except sqlite3.Error as e:
+        print(f"Database error: {e}")
+        conn.rollback()
 
-
+# Call this function before running the app
 if __name__ == '__main__':
     try:
+        add_department_column()  # Add this line before init_db()
         init_db()
         app.run(host="0.0.0.0", port=8181, threaded=True, use_reloader=False)
     finally:
-        # Ensure the scheduler shuts down when the app stops
         scheduler.shutdown()
     

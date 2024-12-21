@@ -25,41 +25,48 @@
 	    </form>
 	</section>
     <!-- Task Creation Form (Initially Hidden) -->
-    <section id="taskFormSection" style="display: none;">
-        <h2>Create a Task</h2>
-        <form id="addTaskForm" action="{{ url_for('add_task') }}" method="post">
-            <div class="form-group">
-                <label for="description">Description</label>
-                <input type="text" name="description" required>
-            </div>
-            <div class="form-group">
-                <label for="priority">Priority</label>
-                <select name="priority">
-                    <option value="High">High Priority</option>
-                    <option value="Medium" selected>Medium Priority</option>
-                    <option value="Low">Low Priority</option>
-                </select>
-            </div>
-            <div class="form-group">
-                <label for="monthly_action_id">Monthly Action Item (Optional)</label>
-                <select name="monthly_action_id">
-                    <option value="">Select Monthly Action Item</option>
-                    {% for action in monthly_actions %}
-                    <option value="{{ action[0] }}">{{ action[1] }} ({{ action[2] }} Priority)</option>
-                    {% endfor %}
-                </select>
-            </div>
-            <div class="form-group">
-                <label for="assigned_person">Assigned Person</label>
-                <input type="text" name="assigned_person">
-            </div>
-            <div class="form-group">
-                <label for="due_date">Due Date</label>
-                <input type="date" name="due_date">
-            </div>
-            <button type="submit" id="addTaskButton" class="btn-addTask">Add Task</button>
-        </form>
-    </section>
+	<section id="taskFormSection" style="display: none;">
+	    <h2>Create a Task</h2>
+	    <form id="addTaskForm" action="/add" method="post">
+	        <div class="form-group">
+	            <label for="description">Description</label>
+	            <input type="text" id="description" name="description" required>
+	        </div>
+	        <div class="form-group">
+	            <label for="priority">Priority</label>
+	            <select id="priority" name="priority">
+	                <option value="High">High Priority</option>
+	                <option value="Medium" selected>Medium Priority</option>
+	                <option value="Low">Low Priority</option>
+	            </select>
+	        </div>
+	        <div class="form-group">
+	            <label for="monthly_action_id">Monthly Action Item (Optional)</label>
+	            <select id="monthly_action_id" name="monthly_action_id">
+	                <option value="">Select Monthly Action Item</option>
+	                {% for action in monthly_actions %}
+	                <option value="{{ action[0] }}">{{ action[1] }} ({{ action[2] }} Priority)</option>
+	                {% endfor %}
+	            </select>
+	        </div>
+	        <div class="form-group">
+	            <label for="recipients">Assigned Person</label>
+	            <input type="text" id="emailSearch_0" class="email-search-input form-control"
+	                   placeholder="Search recipient by keyword"
+	                   oninput="searchEmailRecipients(0, this.value)">
+	            <ul id="emailResults_0" class="email-results-list"></ul>
+	            <div id="selectedEmails_0" class="selected-emails-container"></div>
+	            <!-- Hidden input for recipients -->
+	            <input type="hidden" id="recipientsJson" name="recipients">
+	        </div>
+	        <div class="form-group">
+	            <label for="due_date">Due Date</label>
+	            <input type="date" id="due_date" name="due_date">
+	        </div>
+	        <button type="submit" id="addTaskButton" class="btn-addTask">Add Task</button>
+	    </form>
+	</section>
+ 
 
     <!-- Search Form for Fetching Tasks -->
     <section class="task-search">
@@ -90,6 +97,17 @@
     <!-- Daily Task List -->
     <section class="task-list">
         <h3>Daily Task List</h3>
+		{% with messages = get_flashed_messages(with_categories=true) %}
+		    {% if messages %}
+		        <div class="alerts">
+		            {% for category, message in messages %}
+		                <div class="alert alert-{{ category }}">
+		                    {{ message }}
+		                </div>
+		            {% endfor %}
+		        </div>
+		    {% endif %}
+		{% endwith %}		
         {% if tasks %}
 		<table class="table table-striped">
 		    <thead>
@@ -104,6 +122,10 @@
 		            <th>Status (%)</th>   
 		            <th>Actions</th>
 		            <th>Updates</th>
+					<th>Assigned To</th>
+					<th>Assigned By</th>
+					<th>Approval Status</th>
+					<th>Approval Actions</th>					
 		            <th>Email Notification</th>
 		        </tr>
 		    </thead>
@@ -169,7 +191,38 @@
 					        {{ task[7] }}
 					    </div>
 					</td>
-		            <!-- Email Notification Column -->
+					<!-- Add this to the task list table row within the for loop -->
+					<td>{{ task.assigned_person }}</td>
+					<td>{{ task.assigned_by_name }}</td>
+					<td>{{ task.approval_status }}</td>
+					<td>
+					    {% if task.requires_approval and task.assigned_person ==  session['username']  %}
+					    <form action="{{ url_for('request_approval', task_id=task.id) }}" method="POST">
+					        <button type="submit" class="btn btn-primary">Request Approval</button>
+					    </form>
+					    {% endif %}
+
+					    {% if task.assigned_by_name ==  session['username']%}
+						<form action="{{ url_for('request_status_update', task_id=task.id) }}" method="POST">
+						    <button type="submit" class="btn btn-primary">Request Status Udate</button>
+						</form>
+					    <form action="{{ url_for('approve_task', task_id=task.id) }}" method="POST">
+					        <button type="submit" name="status" value="approved" class="btn btn-success">Approve</button>
+					        <button type="submit" name="status" value="rejected" class="btn btn-danger">Reject</button>
+					    </form>
+					    <form action="{{ url_for('request_status_update', task_id=task.id) }}" method="POST">
+					        <button type="submit" class="btn btn-warning">Request Update</button>
+					    </form>
+					    {% endif %}
+
+					    {% if task.assigned_by_name !=  session['username']%}
+					    <button class="btn btn-secondary" disabled>Delete Disabled</button>
+					    {% else %}
+					    <form action="{{ url_for('delete_task', task_id=task.id) }}" method="POST">
+					        <button type="submit" class="btn btn-danger">Delete</button>
+					    </form>
+					    {% endif %}
+					</td>
 					<!-- Email Notification Column -->
 					<td>
 					    <button type="button" id="show-Email-btn-{{ task[0] }}" class="show-btn" onclick="toggleUpdates_3({{ task[0] }})">Send Email Notification</button>
@@ -453,31 +506,30 @@
 	}
 
 	function selectEmail(taskId, user) {
-	    const emailResults = document.getElementById(`emailResults_${taskId}`);
-	    emailResults.innerHTML = ''; // Clear results once a selection is made
-
 	    const selectedEmailsContainer = document.getElementById(`selectedEmails_${taskId}`);
-	    if (!selectedEmailsContainer) {
-	        const container = document.createElement('div');
-	        container.id = `selectedEmails_${taskId}`;
-	        container.className = 'selected-emails-container';
-	        document.getElementById(`emailSearch_${taskId}`).after(container);
-	    }
+	    
+	    // Prevent duplicate entries
+	    const existing = Array.from(selectedEmailsContainer.children).find(emailDiv => 
+	        emailDiv.dataset.email === user.email
+	    );
+	    if (existing) return;
 
-	    const selectedEmails = document.getElementById(`selectedEmails_${taskId}`);
+	    // Create a new div for the selected email
 	    const emailDiv = document.createElement('div');
 	    emailDiv.textContent = `${user.name} (${user.email})`;
 	    emailDiv.className = 'selected-email';
 	    emailDiv.dataset.email = user.email;
 
+	    // Add a remove button
 	    const removeBtn = document.createElement('button');
 	    removeBtn.textContent = 'x';
 	    removeBtn.onclick = () => emailDiv.remove();
 	    emailDiv.appendChild(removeBtn);
 
-	    selectedEmails.appendChild(emailDiv);
+	    selectedEmailsContainer.appendChild(emailDiv);
 	}
 
+	
 	function displayTextWithNewLines(text, elementId) {
 	    // Replace newline characters with <br> tags
 	    const formattedText = text.replace(/\n/g, '<br>');
@@ -501,14 +553,22 @@
 	        populateEmailDropdown(taskId);
 	    });
 	});
-    // Optional: Alert the form action on form submission
-    document.getElementById("addTaskForm").addEventListener("submit", function (event) {
-        event.preventDefault(); // Prevent immediate form submission
-        const formAction = this.action; // Get the form's action URL
-        alert(`Form Action URL: ${formAction}`); // Display the action URL
-        this.submit(); // Submit the form
-    });
-	
+	// Handle form submission
+	document.getElementById('addTaskForm').addEventListener('submit', function (event) {
+	    // Get selected recipients from the container
+	    const selectedEmailsContainer = document.getElementById('selectedEmails_0');
+	    const recipients = Array.from(selectedEmailsContainer.children).map(emailDiv => ({
+	        name: emailDiv.textContent.split(' (')[0].trim(),
+	        email: emailDiv.dataset.email
+	    }));
+
+	    // Populate the hidden input with the JSON string
+	    document.getElementById('recipientsJson').value = JSON.stringify(recipients);
+
+	    // Debugging: Log the value for verification
+	    console.log("Recipients JSON:", document.getElementById('recipientsJson').value);
+	});
+
 	// Toggle the visibility of the date range form when the export button is pressed
 	document.getElementById('exportButton').addEventListener('click', function () {
 	    const dateRangeForm = document.getElementById('dateRangeForm');
@@ -548,8 +608,47 @@
 	        }
 	    });
 	});
+	function assignTask() {
+	    const form = document.getElementById('assignTaskForm');
+	    const formData = new FormData(form);
 
-	 	
+	    fetch('/assign-task', {
+	        method: 'POST',
+	        body: formData
+	    })
+	    .then(response => response.json())
+	    .then(data => {
+	        if (data.success) {
+	            alert('Task assigned successfully');
+	        } else {
+	            alert('Error: ' + data.error);
+	        }
+	    })
+	    .catch(error => {
+	        console.error('Error:', error);
+	    });
+	}
+
+	function approveTask() {
+	    const form = document.getElementById('approveTaskForm');
+	    const formData = new FormData(form);
+
+	    fetch(`/approve-task/${formData.get('task_id')}`, {
+	        method: 'POST',
+	        body: formData
+	    })
+	    .then(response => response.json())
+	    .then(data => {
+	        if (data.success) {
+	            alert('Task ' + formData.get('status') + ' successfully');
+	        } else {
+	            alert('Error: ' + data.error);
+	        }
+	    })
+	    .catch(error => {
+	        console.error('Error:', error);
+	    });
+	}
 	function toggleUpdates(taskId) {
 	    const updateSection = document.getElementById(`update-section-${taskId}`);
 	    updateSection.style.display = updateSection.style.display === 'none' ? 'block' : 'none';
