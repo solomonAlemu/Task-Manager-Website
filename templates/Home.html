@@ -224,13 +224,6 @@
 						    </form>
 						    {% endif %}
 
-						    {% if task.approved_by == session['user_id'] %}
-						    <form action="{{ url_for('approve_task', task_id=task.id) }}" method="POST">
-						        <button type="submit" name="status" value="approved" class="btn btn-success">Approve</button>
-						        <button type="submit" name="status" value="rejected" class="btn btn-danger">Reject</button>
-						    </form>
-						    {% endif %}
-
 						    {% if  task.approved_by == session['user_id'] %}
 						    <form action="{{ url_for('delete_task', task_id=task.id) }}" method="POST">
 						        <button type="submit" class="delete-btn" onclick="return confirm('Are you sure you want to delete this item?')">Delete</button>

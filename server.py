@@ -498,106 +498,6 @@ def request_justification(task_id):
         flash("Error: Unable to send status update request.", "error")
         return redirect(url_for('home'))
     
-@app.route('/add', methods=['POST'])
-def add_task():
-    """Add a new task with optional monthly action item link."""
-    if 'user_id' not in session:
-        return redirect(url_for('login'))
-
-    user_id = session['user_id']  # Get logged-in user's ID
-    description = request.form.get('description', '').strip()
-    priority = request.form.get('priority', 'Medium')
-    due_date = request.form.get('due_date', '').strip()
-    monthly_action_id = request.form.get('monthly_action_id')
-    recipients = request.form.get('recipients', '[]')  # Get recipients JSON
-
-    # Debug: Log form data and recipients
-    print("Form Data:", request.form)
-    print("Recipients JSON:", recipients)
-
-    # Parse recipients
-    try:
-        recipients = json.loads(recipients)
-        # Convert the list of names into a comma-separated string
-        assigned_person = ", ".join(recipient['name'] for recipient in recipients)
-    except json.JSONDecodeError:
-        assigned_person = ""  # Default to empty string if invalid JSON
-
-    if not description:
-        return "Error: Task description cannot be empty!", 400
-
-    try:
-        with get_db_connection() as conn:
-            cursor = conn.cursor()
-            # Retrieve assignee_id from assigned_person reference
-            if assigned_person:
-                cursor.execute(
-                    "SELECT id FROM users WHERE username = ?",
-                    (assigned_person,)
-                )
-                assignee_row = cursor.fetchone()
-                if not assignee_row:
-                    return "Error: Assigned person not found!", 400
-                assignee_id = assignee_row[0]
-            else:
-                assignee_id = None
-
-            # Check task assignment hierarchy if assignee_id is provided
-            if assignee_id:
-                # Get assigner's role
-                cursor.execute(
-                    "SELECT role FROM users WHERE id = ?",
-                    (user_id,)
-                )
-                assigner_role = cursor.fetchone()[0]
-
-                # Get assignee's role
-                cursor.execute(
-                    "SELECT role FROM users WHERE id = ?",
-                    (assignee_id,)
-                )
-                assignee_role = cursor.fetchone()[0]
-
-                # Check if assignment is allowed based on hierarchy
-                cursor.execute(
-                    """
-                    SELECT r1.role_level as assigner_level, r2.role_level as assignee_level
-                    FROM user_roles r1, user_roles r2
-                    WHERE r1.role_name = ? AND r2.role_name = ?
-                    """,
-                    (assigner_role, assignee_role),
-                )
-                levels = cursor.fetchone()
-                if not levels or levels[0] > levels[1]:
-                    return "Error: Invalid task assignment hierarchy", 403
-
-            # Insert the task into the database
-            cursor.execute(
-                """
-                INSERT INTO tasks (
-                    user_id, assigned_person, description, priority, due_date, 
-                    status, monthly_action_id, assigned_by, requires_approval, approved_by
-                ) VALUES (?, ?, ?, ?, ?, 'Open', ?, ?, ?, ?)
-                """,
-                (
-                    assignee_id if assignee_id else user_id,
-                    assigned_person,
-                    description,
-                    priority,
-                    due_date,
-                    monthly_action_id,
-                    user_id,
-                    1 if assignee_id else 0,  # Requires approval if assigned to someone else
-                    user_id  # The original task assigner as the approver
-                ),
-            )
-            conn.commit()
-
-        return redirect(url_for('home'))
-    except sqlite3.Error as e:
-        print(f"Database error: {e}")
-        return "Error: Unable to add task to the database.", 500
-
 @app.route('/update/<int:task_id>', methods=['POST'])
 def update_task(task_id):
     """Update task details for the logged-in user."""
@@ -639,6 +539,16 @@ def update_task(task_id):
     try:
         with get_db_connection() as conn:
             cursor = conn.cursor()
+
+            # Fetch user role
+            cursor.execute("SELECT role FROM users WHERE id = ?", (user_id,))
+            user_role = cursor.fetchone()['role']
+
+            # Prevent task reassignment if user role is 'Employee'
+            if user_role == 'Employee' and assigned_person:
+                flash("You do not have permission to reassign tasks.", "error")
+                return redirect(url_for('home'))
+
             # Fetch the existing task
             cursor.execute("""
                 SELECT assigned_person, description, priority, status, percentage_completion, updates, due_date, monthly_action_id, approved_by, approval_status, assigned_by
@@ -721,23 +631,37 @@ def update_task(task_id):
                     print("Error: Invalid task assignment hierarchy")
                     return "Error: Invalid task assignment hierarchy", 403
 
-            # Update the task
-            cursor.execute("""
-                UPDATE tasks
-                SET assigned_person = ?, description = ?, priority = ?, status = ?, 
-                    percentage_completion = ?, updates = ?, due_date = ?, monthly_action_id = ?,
-                    assigned_by = ?, requires_approval = ?, approved_by = ?, approval_status = ?
-                WHERE id = ? AND (user_id = ? OR assigned_by = ? OR approved_by = ? OR assigned_person = (
-                    SELECT username FROM users WHERE id = ?
-                ))
-            """, (assigned_person, description, priority, status, percentage_completion, update_entry,
-                  due_date, monthly_action_id, user_id, 1 if assignee_id else 0, current_approved_by, "Pending", task_id, user_id, user_id, user_id, user_id))
-            conn.commit()
+            # Update the task without changing the task assigner if the user is an employee
+            if user_role == 'Employee':
+                cursor.execute("""
+                    UPDATE tasks
+                    SET assigned_person = ?, description = ?, priority = ?, status = ?, 
+                        percentage_completion = ?, updates = ?, due_date = ?, monthly_action_id = ?,
+                        requires_approval = ?, approved_by = ?, approval_status = ?
+                    WHERE id = ? AND (user_id = ? OR assigned_by = ? OR approved_by = ? OR assigned_person = (
+                        SELECT username FROM users WHERE id = ?
+                    ))
+                """, (assigned_person, description, priority, status, percentage_completion, update_entry,
+                      due_date, monthly_action_id, 1 if assignee_id else 0, current_approved_by, "Pending", task_id, user_id, current_assigned_by, user_id, user_id))
+            else:
+                cursor.execute("""
+                    UPDATE tasks
+                    SET assigned_person = ?, description = ?, priority = ?, status = ?, 
+                        percentage_completion = ?, updates = ?, due_date = ?, monthly_action_id = ?,
+                        assigned_by = ?, requires_approval = ?, approved_by = ?, approval_status = ?
+                    WHERE id = ? AND (user_id = ? OR assigned_by = ? OR approved_by = ? OR assigned_person = (
+                        SELECT username FROM users WHERE id = ?
+                    ))
+                """, (assigned_person, description, priority, status, percentage_completion, update_entry,
+                      due_date, monthly_action_id, user_id, 1 if assignee_id else 0, current_approved_by, "Pending", task_id, user_id, user_id, user_id, user_id))
 
+            conn.commit()
         return redirect(url_for('home'))
     except sqlite3.Error as e:
         print(f"Database error: {e}")
         return "Error: Unable to update task.", 500
+
+
 
 @app.route('/delete/<int:task_id>', methods=['POST'])
 def delete_task(task_id):
