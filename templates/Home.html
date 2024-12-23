@@ -122,8 +122,8 @@
 		            <th>Status (%)</th>   
 		            <th>Actions</th>
 		            <th>Updates</th>
-					<th>Assigned To</th>
 					<th>Assigned By</th>
+					<th>Approved By</th>
 					<th>Approval Status</th>
 					<th>Approval Actions</th>					
 		            <th>Email Notification</th>
@@ -137,13 +137,13 @@
 		            <td>{{ task[2] }}</td>
 		            <td>{{ task[3] }}</td>
 		            <td>{{ task[4] }}</td>
-		            <td>{{ task[9] if task[9] else 'No linked action' }}</td>
+		            <td>{{ task.monthly_action_description if task.monthly_action_description else 'No linked action' }}</td>
 		            <td>{{ task[8] }}</td>
 		            <td>{{ task[5] if task[5] else "0"}} %</td>
 		            <td>
 		                <!-- Update Task Progress -->
 						<button type="button" id="show-status-btn-{{ task[0] }}" class="show-btn" onclick="toggleUpdates_2({{ task[0] }})">Edit Task</button>
-						<form action="{{ url_for('update_task', task_id=task[0]) }}" method="POST" class="form-container">
+						<form id="updateTaskForm" action="{{ url_for('update_task', task_id=task[0]) }}" method="POST" class="form-container">
 						    <div id="id_grid-container-{{ task[0] }}" class="grid-container" style="display: none;">
 						        <div class="grid-item">
 									<input type="number" id="progress" name="percentage_completion" placeholder="Progress (%)" min="0" max="100" step="1" />
@@ -155,34 +155,41 @@
 						                <option value="Cancelled">Cancelled</option>
 						            </select>
 						        </div>
-						        <div class="grid-item">
-									<input type="text" name="assigned_person" placeholder="Revised Assigned Person" >
-									<select name="priority">
-										<option value="" selected>Select Priority</option>
-									    <option value="High">High Priority</option>
-									    <option value="Medium">Medium Priority</option>
-									    <option value="Low">Low Priority</option>
-									</select>																
-						            <input type="text" name="revised_description" placeholder="Revised Description" >
-						            <textarea name="notes" class="notes-text" placeholder="Add notes..."></textarea>
-									<div class="form-group">
-									    <input type="date" name="due_date" placeholder="Revised Due Date">
-									</div>
-									<div class="form-group">
-									    <select name="monthly_action_id" placeholder="Revised Monthly Action Item">
-									        <option value="">Select Monthly Action Item</option>
-									        {% for action in monthly_actions %}
-									        <option value="{{ action[0] }}">{{ action[1] }} ({{ action[2] }} Priority)</option>
-									        {% endfor %}
-									    </select>
-									</div>																		
-						        </div>
+								<div class="grid-item">
+								    <label for="recipients">Assigned Person</label>
+								    <input type="text" id="emailSearch_grid" class="email-search-input form-control"
+								           placeholder="Search recipient by keyword"
+								           oninput="searchEmailRecipients('grid', this.value)">
+								    <ul id="emailResults_grid" class="email-results-list"></ul>
+								    <div id="selectedEmails_grid" class="selected-emails-container"></div>
+								    <!-- Hidden input for recipients -->
+								    <input type="hidden" id="recipientsJson_grid" name="recipients">
+								    
+								    <select name="priority">
+								        <option value="" selected>Select Priority</option>
+								        <option value="High">High Priority</option>
+								        <option value="Medium">Medium Priority</option>
+								        <option value="Low">Low Priority</option>
+								    </select>                                                                
+								    <input type="text" name="revised_description" placeholder="Revised Description" >
+								    <textarea name="notes" class="notes-text" placeholder="Add notes..."></textarea>
+								    <div class="form-group">
+								        <input type="date" name="due_date" placeholder="Revised Due Date">
+								    </div>
+								    <div class="form-group">
+								        <select name="monthly_action_id" placeholder="Revised Monthly Action Item">
+								            <option value="">Select Monthly Action Item</option>
+								            {% for action in monthly_actions %}
+								            <option value="{{ action[0] }}">{{ action[1] }} ({{ action[2] }} Priority)</option>
+								            {% endfor %}
+								        </select>
+								    </div>
+								</div>
 								<button type="submit" class="status-btn" onclick="return confirm('Are you sure you want to update this item?')">Update</button>
 						    </div>
 						</form>
 		                <!-- Delete Task -->
 						<form action="/delete/{{ task[0] }}" method="POST" class="delete-form">
-							<button type="submit" class="delete-btn" onclick="return confirm('Are you sure you want to delete this item?')">Delete</button>
 						</form>	
 		            </td>
 					<td>
@@ -192,40 +199,49 @@
 					    </div>
 					</td>
 					<!-- Add this to the task list table row within the for loop -->
-					<td>{{ task.assigned_person }}</td>
 					<td>{{ task.assigned_by_name }}</td>
+					<td>{{ task.approved_by_name }}</td>
 					<td>{{ task.approval_status }}</td>
 					<td>
-					    {% if task.requires_approval and task.assigned_person ==  session['username']  %}
-					    <form action="{{ url_for('request_approval', task_id=task.id) }}" method="POST">
-					        <button type="submit" class="btn btn-primary">Request Approval</button>
-					    </form>
-					    {% endif %}
+						<button type="button" id="show-status-btn-{{ task[0] }}" class="show-btn" onclick="toggleUpdates_4({{ task[0] }})">Edit </button> 				
+						 <div id="id_grid-container_3-{{ task.id }}" class="grid-container" style="display: none;">
+						    {% if task.requires_approval and task.assigned_person == session['username'] %}
+						    <form action="{{ url_for('request_approval', task_id=task.id) }}" method="POST">
+						        <button type="submit" class="btn btn-primary">Request Approval</button>
+						    </form>
+						    {% endif %}
 
-					    {% if task.assigned_by_name ==  session['username']%}
-						<form action="{{ url_for('request_status_update', task_id=task.id) }}" method="POST">
-						    <button type="submit" class="btn btn-primary">Request Status Udate</button>
-						</form>
-					    <form action="{{ url_for('approve_task', task_id=task.id) }}" method="POST">
-					        <button type="submit" name="status" value="approved" class="btn btn-success">Approve</button>
-					        <button type="submit" name="status" value="rejected" class="btn btn-danger">Reject</button>
-					    </form>
-					    <form action="{{ url_for('request_status_update', task_id=task.id) }}" method="POST">
-					        <button type="submit" class="btn btn-warning">Request Update</button>
-					    </form>
-					    {% endif %}
+						    {% if task.assigned_by_name == session['username'] or task.approved_by == session['user_id'] %}
+						    <form action="{{ url_for('request_status_update', task_id=task.id) }}" method="POST">
+						        <button type="submit" class="btn btn-primary">Request Status Update</button>
+						    </form>
+						    <form action="{{ url_for('approve_task', task_id=task.id) }}" method="POST">
+						        <button type="submit" name="status" value="approved" class="btn btn-success">Approve</button>
+						        <button type="submit" name="status" value="rejected" class="btn btn-danger">Reject</button>
+						    </form>
+						    {% endif %}
 
-					    {% if task.assigned_by_name !=  session['username']%}
-					    <button class="btn btn-secondary" disabled>Delete Disabled</button>
-					    {% else %}
-					    <form action="{{ url_for('delete_task', task_id=task.id) }}" method="POST">
-					        <button type="submit" class="btn btn-danger">Delete</button>
-					    </form>
-					    {% endif %}
+						    {% if task.approved_by == session['user_id'] %}
+						    <form action="{{ url_for('approve_task', task_id=task.id) }}" method="POST">
+						        <button type="submit" name="status" value="approved" class="btn btn-success">Approve</button>
+						        <button type="submit" name="status" value="rejected" class="btn btn-danger">Reject</button>
+						    </form>
+						    {% endif %}
+
+						    {% if  task.approved_by == session['user_id'] %}
+						    <form action="{{ url_for('delete_task', task_id=task.id) }}" method="POST">
+						        <button type="submit" class="delete-btn" onclick="return confirm('Are you sure you want to delete this item?')">Delete</button>
+						    </form>
+						    {% endif %}
+
+						    {% if task.assigned_by_name != session['username'] and task.approved_by != session['user_id'] %}
+						    <button class="btn btn-secondary" disabled>Delete Disabled</button>
+						    {% endif %}
+						</div>
 					</td>
 					<!-- Email Notification Column -->
 					<td>
-					    <button type="button" id="show-Email-btn-{{ task[0] }}" class="show-btn" onclick="toggleUpdates_3({{ task[0] }})">Send Email Notification</button>
+					    <button type="button" id="show-Email-btn-{{ task[0] }}" class="show-btn" onclick="toggleUpdates_3({{ task[0] }})">Send Email</button>
 					    <div id="id_grid-container_2-{{ task[0] }}" class="grid-container_2" style="display: none;">
 					        <!-- Adding a form element to properly structure the data -->
 					        <form id="emailForm_{{ task[0] }}" class="email-form">
@@ -477,34 +493,37 @@
 	}
 
 	function searchEmailRecipients(taskId, keyword) {
-	    if (keyword.length < 2) {
-	        document.getElementById(`emailResults_${taskId}`).innerHTML = ''; // Clear results for short queries
+	    if (!keyword || keyword.length < 2) {
+	        document.getElementById(`emailResults_${taskId}`).innerHTML = '';
 	        return;
 	    }
 
 	    fetch(`/search-emails?keyword=${encodeURIComponent(keyword)}`)
 	        .then(response => response.json())
 	        .then(data => {
-	            const emailResults = document.getElementById(`emailResults_${taskId}`);
-	            emailResults.innerHTML = ''; // Clear previous results
-
+	            const resultsContainer = document.getElementById(`emailResults_${taskId}`);
+	            resultsContainer.innerHTML = '';
+	            
 	            if (data.success && data.users.length > 0) {
 	                data.users.forEach(user => {
-	                    const listItem = document.createElement('li');
-	                    listItem.textContent = `${user.name} (${user.email})`;
-	                    listItem.className = 'email-result-item';
-	                    listItem.onclick = () => selectEmail(taskId, user);
-	                    emailResults.appendChild(listItem);
+	                    const li = document.createElement('li');
+	                    li.className = 'email-result-item';
+	                    li.textContent = `${user.name} (${user.email})`;
+	                    li.onclick = () => selectEmail(taskId, user);
+	                    resultsContainer.appendChild(li);
 	                });
 	            } else {
-	                emailResults.innerHTML = '<li class="email-result-item">No matches found</li>';
+	                resultsContainer.innerHTML = '<li class="email-result-item">No matches found</li>';
 	            }
 	        })
 	        .catch(error => {
 	            console.error('Error searching emails:', error);
+	            document.getElementById(`emailResults_${taskId}`).innerHTML = 
+	                '<li class="email-result-item">Error searching for emails</li>';
 	        });
 	}
 
+	// Select email recipient
 	function selectEmail(taskId, user) {
 	    const selectedEmailsContainer = document.getElementById(`selectedEmails_${taskId}`);
 	    
@@ -528,7 +547,6 @@
 
 	    selectedEmailsContainer.appendChild(emailDiv);
 	}
-
 	
 	function displayTextWithNewLines(text, elementId) {
 	    // Replace newline characters with <br> tags
@@ -569,6 +587,23 @@
 	    console.log("Recipients JSON:", document.getElementById('recipientsJson').value);
 	});
 
+	// Handle form submission for grid item
+	document.getElementById('updateTaskForm').addEventListener('submit', function (event) {
+	    // Get selected recipients from the container
+	    const selectedEmailsContainer = document.getElementById('selectedEmails_grid');
+	    const recipients = Array.from(selectedEmailsContainer.children).map(emailDiv => ({
+	        name: emailDiv.textContent.split(' (')[0].trim(),
+	        email: emailDiv.dataset.email
+	    }));
+
+	    // Populate the hidden input with the JSON string
+	    document.getElementById('recipientsJson_grid').value = JSON.stringify(recipients);
+
+	    // Debugging: Log the value for verification
+	    console.log("Recipients JSON (grid):", document.getElementById('recipientsJson_grid').value);
+	});
+	
+	
 	// Toggle the visibility of the date range form when the export button is pressed
 	document.getElementById('exportButton').addEventListener('click', function () {
 	    const dateRangeForm = document.getElementById('dateRangeForm');
@@ -663,6 +698,11 @@
 	    const updateSection = document.getElementById(`id_grid-container_2-${taskId}`);
 	    updateSection.style.display = updateSection.style.display === 'none' ? 'block' : 'none';
 	}	
+	
+	function toggleUpdates_4(taskId) {
+	    const updateSection = document.getElementById(`id_grid-container_3-${taskId}`);
+	    updateSection.style.display = updateSection.style.display === 'none' ? 'block' : 'none';
+	}		
     </script>
 </div>
 {% endblock %}

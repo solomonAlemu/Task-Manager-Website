@@ -136,43 +136,43 @@ table th, table td {
     box-sizing: border-box;
  
 }
-
 /* Adjust column width ratios for the first table */
-.task-list th:nth-child(1) { width: 1%; }    /* ID */
-.task-list th:nth-child(2) { width: 3%; }    /* Assigned Person */
+.task-list th:nth-child(1) { width: 5%; }    /* ID */
+.task-list th:nth-child(2) { width: 10%; }   /* Assigned Person */
 .task-list th:nth-child(3) { 
-	white-space: pre-wrap; /* Preserve white-space and wrap text */
-	word-wrap: break-word; /* Break long words to wrap within the container */
-	word-break: break-word; /* Ensure words are broken to fit within the width */
-	overflow-wrap: break-word; /* Handle word wrapping for overflows */
-	width: 20%; 
+    white-space: pre-wrap; /* Preserve white-space and wrap text */
+    word-wrap: break-word; /* Break long words to wrap within the container */
+    word-break: break-word; /* Ensure words are broken to fit within the width */
+    overflow-wrap: break-word; /* Handle word wrapping for overflows */
+    width: 15%; 
 }   /* Description */
-.task-list th:nth-child(4) { width: 3%; }    /* Priority */
-.task-list th:nth-child(5) { width: 3%; }    /* Status */
+.task-list th:nth-child(4) { width: 10%; }   /* Priority */
+.task-list th:nth-child(5) { width: 10%; }   /* Status */
 .task-list th:nth-child(6) {
-	white-space: pre-wrap; /* Preserve white-space and wrap text */
-	word-wrap: break-word; /* Break long words to wrap within the container */
-	word-break: break-word; /* Ensure words are broken to fit within the width */
-	overflow-wrap: break-word; /* Handle word wrapping for overflows */ 
-	width: 10%; 
-}    /* Monthly Action */
+    white-space: pre-wrap; /* Preserve white-space and wrap text */
+    word-wrap: break-word; /* Break long words to wrap within the container */
+    word-break: break-word; /* Ensure words are broken to fit within the width */
+    overflow-wrap: break-word; /* Handle word wrapping for overflows */ 
+    width: 10%; 
+}   /* Monthly Action */
 .task-list th:nth-child(7) {
-	white-space: pre-wrap; /* Preserve white-space and wrap text */
-	word-wrap: break-word; /* Break long words to wrap within the container */
-	word-break: break-word; /* Ensure words are broken to fit within the width */
-	overflow-wrap: break-word; /* Handle word wrapping for overflows */
-	 width: 6%; 
- }   /* Due Date */
+    white-space: pre-wrap; /* Preserve white-space and wrap text */
+    word-wrap: break-word; /* Break long words to wrap within the container */
+    word-break: break-word; /* Ensure words are broken to fit within the width */
+    overflow-wrap: break-word; /* Handle word wrapping for overflows */
+    width: 10%; 
+}   /* Due Date */
 .task-list th:nth-child(8) { width: 5%; }    /* Completion */
-.task-list th:nth-child(9) { width: 20%;  }   /* Actions */
+.task-list th:nth-child(9) { width: 10%; }   /* Actions */
 .task-list th:nth-child(10) { 
-	white-space: pre-wrap; /* Preserve white-space and wrap text */
-	word-wrap: break-word; /* Break long words to wrap within the container */
-	word-break: break-word; /* Ensure words are broken to fit within the width */
-	overflow-wrap: break-word; /* Handle word wrapping for overflows */
-	width: 15%; 
+    white-space: pre-wrap; /* Preserve white-space and wrap text */
+    word-wrap: break-word; /* Break long words to wrap within the container */
+    word-break: break-word; /* Ensure words are broken to fit within the width */
+    overflow-wrap: break-word; /* Handle word wrapping for overflows */
+    width: 10%; 
 }  /* Updates */
-.task-list th:nth-child(11) { width: 30%; }  /* Email Notification */
+.task-list th:nth-child(11) { width: 15%; }  /* Email Notification */
+
 
 .updates {
     line-height: 1; /* Adjust this value to reduce spacing */

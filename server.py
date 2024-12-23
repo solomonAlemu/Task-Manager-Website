@@ -215,24 +215,31 @@ def home():
     try:
         with get_db_connection() as conn:
             cursor = conn.cursor()
-            
+
+            # Fetch the username of the current user
+            cursor.execute('SELECT username FROM users WHERE id = ?', (user_id,))
+            current_username = cursor.fetchone()['username']
+
             # Fetch tasks for the logged-in user
             cursor.execute("""
                 SELECT 
                     tasks.id, tasks.assigned_person, tasks.description, tasks.priority, tasks.status,
                     tasks.percentage_completion, tasks.notes, tasks.updates, tasks.due_date,
-                    tasks.assigned_by, tasks.approval_status,
+                    tasks.assigned_by, tasks.approval_status, tasks.approved_by,
                     monthly_action_items.description AS monthly_action_description,
-                    u.username AS assigned_by_name, tasks.requires_approval
+                    u.username AS assigned_by_name, 
+                    ua.username AS approved_by_name,
+                    tasks.requires_approval
                 FROM tasks
                 LEFT JOIN users u ON tasks.assigned_by = u.id
+                LEFT JOIN users ua ON tasks.approved_by = ua.id
                 LEFT JOIN monthly_action_items ON tasks.monthly_action_id = monthly_action_items.id
-                WHERE (tasks.user_id = ? OR tasks.assigned_by = ?)
-                AND (tasks.status NOT IN ('Completed', 'Cancelled') OR tasks.approval_status != 'approved')
-            """, (user_id, user_id))
+                WHERE (tasks.user_id = ? OR tasks.assigned_by = ? OR tasks.assigned_person = ? OR tasks.approved_by = ?)
+                AND (tasks.status NOT IN ('Completed', 'Cancelled') OR tasks.approval_status != 'Approved!')
+            """, (user_id, user_id, current_username, user_id))
 
             tasks = cursor.fetchall()
-            
+
             # Fetch monthly action items for task creation dropdown
             cursor.execute("""
                 SELECT id, description, priority 
@@ -240,9 +247,7 @@ def home():
                 WHERE user_id = ? AND status IN ('Open', 'In Progress')
             """, (user_id,))
             monthly_actions = cursor.fetchall()
-            cursor.execute('SELECT username FROM users WHERE id = ?', (user_id,))
-            current_user = cursor.fetchone()['username']
-        return render_template('Home.html', tasks=tasks, monthly_actions=monthly_actions, current_user=current_user)
+        return render_template('Home.html', tasks=tasks, monthly_actions=monthly_actions, current_user=current_username)
     except sqlite3.Error as e:
         print(f"Database error: {e}")
         return f"An error occurred: {e}", 500
@@ -303,8 +308,6 @@ def assign_task():
         print(f"Database error: {e}")
         return jsonify({"success": False, "error": "Database error"}), 500
 
-from flask import flash, redirect, url_for
-
 @app.route('/approve-task/<int:task_id>', methods=['POST'])
 def approve_task(task_id):
     """Approve or reject an approval request for a task from the task assigner."""
@@ -312,31 +315,40 @@ def approve_task(task_id):
         flash("Unauthorized: Please log in to approve or reject tasks.", "error")
         return redirect(url_for('login'))
     
-    approver_id = session['user_id']
     approval_status = request.form.get('status')  # 'approved' or 'rejected'
     
     try:
         with get_db_connection() as conn:
             cursor = conn.cursor()
-            
-            # Check if the logged-in user is the task assigner
+
+            # Fetch task details
             cursor.execute('''
-                SELECT id
+                SELECT assigned_by, approved_by
                 FROM tasks
-                WHERE id = ? AND assigned_by = ?
-            ''', (task_id, approver_id))
+                WHERE id = ?
+            ''', (task_id,))
             
             task = cursor.fetchone()
             if not task:
-                flash("Error: Task not found or you do not have permission to approve/reject it.", "error")
+                flash("Error: Task not found.", "error")
                 return redirect(url_for('home'))
-                
-            # Update task approval status
+
+            assigned_by = task[0]
+            approved_by = task[1]
+            approver_id = session['user_id']
+
+            # Check if the task assigner is the same as the task approver
+            if approved_by == approver_id:
+                approval_status = approval_status
+            else:
+                approval_status = "Pending (" + approval_status + ")" # Use + for string concatenation
+
+            # Update task approval status without changing approver_id
             cursor.execute('''
                 UPDATE tasks 
-                SET approval_status = ?, approved_by = ?
+                SET approval_status = ?
                 WHERE id = ?
-            ''', (approval_status, approver_id, task_id))
+            ''', (approval_status, task_id))
             
             conn.commit()
             flash(f"Task {approval_status}.", "success")
@@ -349,7 +361,7 @@ def approve_task(task_id):
 
 @app.route('/request_approval/<int:task_id>', methods=['POST'])
 def request_approval(task_id):
-    """Request status update for a task from the task assigner."""
+    """Request approval for a task from the task assigner or approver."""
     if 'user_id' not in session:
         flash("Unauthorized: Please log in to request a status update.", "error")
         return redirect(url_for('login'))
@@ -359,20 +371,25 @@ def request_approval(task_id):
         with get_db_connection() as conn:
             cursor = conn.cursor()
 
+            # Fetch the username of the current user
+            cursor.execute('SELECT username FROM users WHERE id = ?', (user_id,))
+            current_username = cursor.fetchone()['username']
+
             # Verify that the task is assigned to the current user
             cursor.execute('''
-                SELECT id, assigned_by
+                SELECT id, assigned_by, approved_by
                 FROM tasks
-                WHERE id = ? AND user_id = ?
-            ''', (task_id, user_id))
+                WHERE id = ? AND assigned_person = ?
+            ''', (task_id, current_username))
             task = cursor.fetchone()
 
             if not task:
                 flash("Error: Task not found or you do not have permission to request an update.", "error")
                 return redirect(url_for('home'))
 
-            # Set requires_approval to 1 and notify the task assigner
             assigned_by = task[1]
+            approved_by = task[2]
+            # Set requires_approval to 1
             cursor.execute('''
                 UPDATE tasks
                 SET requires_approval = 1
@@ -380,18 +397,15 @@ def request_approval(task_id):
             ''', (task_id,))
             conn.commit()
 
-            flash("Approval request sent to the task assigner.", "success")
+            flash("Approval request sent to the task assigner or approver.", "success")
         return redirect(url_for('home'))
     except sqlite3.Error as e:
         print(f"Database error: {e}")
         flash("Error: Unable to send approval request.", "error")
         return redirect(url_for('home'))
- 
 @app.route('/request-status-update/<int:task_id>', methods=['POST'])
-
 def request_status_update(task_id):
-
-    """Request a status update for a specific task from the task assigner."""
+    """Request a status update for a specific task from the task assigner or reassigner."""
 
     if 'user_id' not in session:
         flash("Unauthorized: Please log in to request a status update.", "error")
@@ -404,12 +418,12 @@ def request_status_update(task_id):
         with get_db_connection() as conn:
             cursor = conn.cursor()
             
-            # Check if the logged-in user is the task assigner
+            # Check if the logged-in user is the task assigner or reassigner
             cursor.execute('''
-                SELECT id
+                SELECT id, assigned_by, approved_by
                 FROM tasks
-                WHERE id = ? AND assigned_by = ?
-            ''', (task_id, approver_id))
+                WHERE id = ? AND (assigned_by = ? OR approved_by = ?)
+            ''', (task_id, approver_id, approver_id))
             
             task = cursor.fetchone()
 
@@ -417,12 +431,14 @@ def request_status_update(task_id):
                 flash("Error: Task not found or you do not have permission to approve/reject it.", "error")
                 return redirect(url_for('home'))
 
+            approved_by = task[2]  # Retain the original approver ID
+
             # Update the task to indicate a status update request
             cursor.execute('''
                 UPDATE tasks 
-                SET approval_status = ?, approved_by = ?
+                SET approval_status = ?
                 WHERE id = ?
-            ''', (approval_status, approver_id, task_id))
+            ''', (approval_status, task_id))
             
             conn.commit()
 
@@ -433,8 +449,7 @@ def request_status_update(task_id):
         flash("Error: Unable to send status update request.", "error")
         return redirect(url_for('home'))
 
-
-
+    
 @app.route('/add', methods=['POST'])
 def add_task():
     """Add a new task with optional monthly action item link."""
@@ -513,8 +528,8 @@ def add_task():
                 """
                 INSERT INTO tasks (
                     user_id, assigned_person, description, priority, due_date, 
-                    status, monthly_action_id, assigned_by, requires_approval
-                ) VALUES (?, ?, ?, ?, ?, 'Open', ?, ?, ?)
+                    status, monthly_action_id, assigned_by, requires_approval, approved_by
+                ) VALUES (?, ?, ?, ?, ?, 'Open', ?, ?, ?, ?)
                 """,
                 (
                     assignee_id if assignee_id else user_id,
@@ -525,6 +540,7 @@ def add_task():
                     monthly_action_id,
                     user_id,
                     1 if assignee_id else 0,  # Requires approval if assigned to someone else
+                    user_id  # The original task assigner as the approver
                 ),
             )
             conn.commit()
@@ -541,76 +557,141 @@ def update_task(task_id):
         return redirect(url_for('login'))
 
     user_id = session['user_id']
-    assigned_person = request.form.get('assigned_person')
     status = request.form.get('status', 'Open')
     percentage_completion = request.form.get('percentage_completion')
     notes = request.form.get('notes', '').strip()
     description = request.form.get('revised_description', '').strip()
     priority = request.form.get('priority', 'Medium')
     due_date = request.form.get('due_date', '').strip()
-    monthly_action_id = request.form.get('monthly_action_id')   
-    
-    try:
-        if percentage_completion:
-            try:
-                percentage_completion = int(percentage_completion)
-            except ValueError:
-                # Handle the case where the conversion fails
-                percentage_completion = None
-                # You can also add logging or an error message here
-        else:
-            # Handle the case where the value is empty
-            percentage_completion = None
-            # You can also add logging or an error message here
+    monthly_action_id = request.form.get('monthly_action_id')
+    recipients = request.form.get('recipients', '[]')  # Get recipients JSON
 
+    # Debug: Log form data and recipients
+    print("Form Data:", request.form)
+    print("Task ID:", task_id)
+    print("User ID:", user_id)
+    print("Recipients JSON:", recipients)
+
+    # Parse recipients
+    try:
+        recipients = json.loads(recipients)
+        # Convert the list of names into a comma-separated string
+        assigned_person = ", ".join(recipient['name'] for recipient in recipients)
+    except json.JSONDecodeError:
+        assigned_person = ""  # Default to empty string if invalid JSON
+
+    if percentage_completion:
+        try:
+            percentage_completion = int(percentage_completion)
+        except ValueError:
+            percentage_completion = None
+    else:
+        percentage_completion = None
+
+    try:
         with get_db_connection() as conn:
             cursor = conn.cursor()
             # Fetch the existing task
             cursor.execute("""
-                SELECT assigned_person, description, priority, status, percentage_completion, updates, due_date, monthly_action_id 
-                FROM tasks 
-                WHERE id = ? AND user_id = ?
-            """, (task_id, user_id))
+                SELECT assigned_person, description, priority, status, percentage_completion, updates, due_date, monthly_action_id, approved_by, approval_status, assigned_by
+                FROM tasks
+                WHERE id = ? AND (user_id = ? OR assigned_by = ? OR approved_by = ? OR assigned_person = (
+                    SELECT username FROM users WHERE id = ?
+                ))
+            """, (task_id, user_id, user_id, user_id, user_id))
             task = cursor.fetchone()
 
             if not task:
+                print("Error: Task not found or unauthorized.")
                 return "Error: Task not found or unauthorized.", 404
-            current_assigned_person, current_description, current_priority, current_status,current_percentage, current_updates, current_due_date, current_monthly_action_id = task
+            current_assigned_person, current_description, current_priority, current_status, current_percentage, current_updates, current_due_date, current_monthly_action_id, current_approved_by, current_approval_status, current_assigned_by = task
+
             # Append new notes to updates
-            update_entry = (10
+            update_entry = (
                 (current_updates or "") +
                 f"\n\n== Update ({datetime.now().strftime('%Y-%m-%d %H:%M')})\n"
                 f"{notes or 'No notes'} | Status: {status}\n"
             )
-            if not assigned_person: 
+
+            # Maintain current values if fields are not provided
+            if not assigned_person:
                 assigned_person = current_assigned_person
-            if not description: 
+            if not description:
                 description = current_description
-            if  status == "Open" or not status: 
+            if status == "Open" or not status:
                 status = current_status
-            if  percentage_completion == 0: 
-                percentage_completion = current_percentage   
-            if  not priority: 
-                priority = current_priority    
-            if  not due_date: 
-                due_date = current_due_date    
-            if  not monthly_action_id: 
-                monthly_action_id = current_monthly_action_id                                                                          
- 
+            if percentage_completion == 0:
+                percentage_completion = current_percentage
+            if not priority:
+                priority = current_priority
+            if not due_date:
+                due_date = current_due_date
+            if not monthly_action_id:
+                monthly_action_id = current_monthly_action_id
+
+            # Retrieve assignee_id from assigned_person reference
+            if assigned_person:
+                cursor.execute(
+                    "SELECT id FROM users WHERE username = ?",
+                    (assigned_person,)
+                )
+                assignee_row = cursor.fetchone()
+                if not assignee_row:
+                    print("Error: Assigned person not found!")
+                    return "Error: Assigned person not found!", 400
+                assignee_id = assignee_row[0]
+            else:
+                assignee_id = None
+
+            # Check task assignment hierarchy if assignee_id is provided
+            if assignee_id:
+                # Get assigner's role
+                cursor.execute(
+                    "SELECT role FROM users WHERE id = ?",
+                    (user_id,)
+                )
+                assigner_role = cursor.fetchone()[0]
+
+                # Get assignee's role
+                cursor.execute(
+                    "SELECT role FROM users WHERE id = ?",
+                    (assignee_id,)
+                )
+                assignee_role = cursor.fetchone()[0]
+
+                # Check if assignment is allowed based on hierarchy
+                cursor.execute(
+                    """
+                    SELECT r1.role_level as assigner_level, r2.role_level as assignee_level
+                    FROM user_roles r1, user_roles r2
+                    WHERE r1.role_name = ? AND r2.role_name = ?
+                    """,
+                    (assigner_role, assignee_role)
+                )
+                levels = cursor.fetchone()
+                if not levels or levels[0] > levels[1]:
+                    print("Error: Invalid task assignment hierarchy")
+                    return "Error: Invalid task assignment hierarchy", 403
+
             # Update the task
             cursor.execute("""
                 UPDATE tasks
                 SET assigned_person = ?, description = ?, priority = ?, status = ?, 
-                    percentage_completion = ?, updates = ?, due_date = ?, monthly_action_id = ?
-                WHERE id = ? AND user_id = ?
-            """, (assigned_person, description, priority, status, percentage_completion, update_entry, 
-                  due_date, monthly_action_id, task_id, user_id))
+                    percentage_completion = ?, updates = ?, due_date = ?, monthly_action_id = ?,
+                    assigned_by = ?, requires_approval = ?, approved_by = ?, approval_status = ?
+                WHERE id = ? AND (user_id = ? OR assigned_by = ? OR approved_by = ? OR assigned_person = (
+                    SELECT username FROM users WHERE id = ?
+                ))
+            """, (assigned_person, description, priority, status, percentage_completion, update_entry,
+                  due_date, monthly_action_id, user_id, 1 if assignee_id else 0, current_approved_by, "Pending", task_id, user_id, user_id, user_id, user_id))
             conn.commit()
-                        
+
         return redirect(url_for('home'))
     except sqlite3.Error as e:
         print(f"Database error: {e}")
         return "Error: Unable to update task.", 500
+
+
 
 
 @app.route('/delete/<int:task_id>', methods=['POST'])
