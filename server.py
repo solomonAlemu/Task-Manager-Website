@@ -389,10 +389,11 @@ def request_approval(task_id):
 
             assigned_by = task[1]
             approved_by = task[2]
-            # Set requires_approval to 1
+
+            # Set approval status to "Requesting approval"
             cursor.execute('''
                 UPDATE tasks
-                SET requires_approval = 1
+                SET approval_status = 'Requesting approval', requires_approval = 1
                 WHERE id = ?
             ''', (task_id,))
             conn.commit()
@@ -403,6 +404,8 @@ def request_approval(task_id):
         print(f"Database error: {e}")
         flash("Error: Unable to send approval request.", "error")
         return redirect(url_for('home'))
+
+    
 @app.route('/request-status-update/<int:task_id>', methods=['POST'])
 def request_status_update(task_id):
     """Request a status update for a specific task from the task assigner or reassigner."""
@@ -449,6 +452,51 @@ def request_status_update(task_id):
         flash("Error: Unable to send status update request.", "error")
         return redirect(url_for('home'))
 
+@app.route('/request_justification/<int:task_id>', methods=['POST'])
+def request_justification(task_id):
+    """Request a status update for a specific task from the task assigner or reassigner."""
+
+    if 'user_id' not in session:
+        flash("Unauthorized: Please log in to request a status update.", "error")
+        return redirect(url_for('login'))
+    
+    approver_id = session['user_id']
+    approval_status = "Justification Required"
+    
+    try:
+        with get_db_connection() as conn:
+            cursor = conn.cursor()
+            
+            # Check if the logged-in user is the task assigner or reassigner
+            cursor.execute('''
+                SELECT id, assigned_by, approved_by
+                FROM tasks
+                WHERE id = ? AND (assigned_by = ? OR approved_by = ?)
+            ''', (task_id, approver_id, approver_id))
+            
+            task = cursor.fetchone()
+
+            if not task:
+                flash("Error: Task not found or you do not have permission to approve/reject it.", "error")
+                return redirect(url_for('home'))
+
+            approved_by = task[2]  # Retain the original approver ID
+
+            # Update the task to indicate a status update request
+            cursor.execute('''
+                UPDATE tasks 
+                SET approval_status = ?
+                WHERE id = ?
+            ''', (approval_status, task_id))
+            
+            conn.commit()
+
+            flash("Status update request sent to the task assignee.", "success")
+        return redirect(url_for('home'))
+    except sqlite3.Error as e:
+        print(f"Database error: {e}")
+        flash("Error: Unable to send status update request.", "error")
+        return redirect(url_for('home'))
     
 @app.route('/add', methods=['POST'])
 def add_task():
@@ -691,9 +739,6 @@ def update_task(task_id):
         print(f"Database error: {e}")
         return "Error: Unable to update task.", 500
 
-
-
-
 @app.route('/delete/<int:task_id>', methods=['POST'])
 def delete_task(task_id):
     """Delete a specific task for the logged-in user."""
@@ -706,16 +751,15 @@ def delete_task(task_id):
     try:
         with get_db_connection() as conn:
             cursor = conn.cursor()
-            
-            # Check if the logged-in user is the one who assigned the task or the assigner no longer exists
+
+            # Check if the logged-in user is the one who assigned the task or is the task approver
             cursor.execute("""
-                SELECT t.id, u.id as assigner_id
+                SELECT t.id
                 FROM tasks t
-                LEFT JOIN users u ON t.assigned_by = u.id
-                WHERE t.id = ? AND (t.assigned_by = ? OR u.id IS NULL)
-            """, (task_id, user_id))
+                WHERE t.id = ? AND (t.assigned_by = ? OR t.approved_by = ?)
+            """, (task_id, user_id, user_id))
             task = cursor.fetchone()
-            
+
             if not task:
                 flash("Error: Task not found or you do not have permission to delete it.", "error")
                 return redirect(url_for('home'))
@@ -730,6 +774,7 @@ def delete_task(task_id):
         print(f"Database error: {e}")
         flash("Error: Unable to delete task.", "error")
         return redirect(url_for('home'))
+
 
  
 @app.route('/fetch', methods=['GET'])

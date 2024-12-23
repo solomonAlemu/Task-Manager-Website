@@ -215,6 +215,9 @@
 						    <form action="{{ url_for('request_status_update', task_id=task.id) }}" method="POST">
 						        <button type="submit" class="btn btn-primary">Request Status Update</button>
 						    </form>
+							<form action="{{ url_for('request_justification', task_id=task.id) }}" method="POST">
+							    <button type="submit" class="btn btn-primary">Request Justification</button>
+							</form>							
 						    <form action="{{ url_for('approve_task', task_id=task.id) }}" method="POST">
 						        <button type="submit" name="status" value="approved" class="btn btn-success">Approve</button>
 						        <button type="submit" name="status" value="rejected" class="btn btn-danger">Reject</button>
