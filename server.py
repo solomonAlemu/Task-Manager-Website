@@ -308,6 +308,106 @@ def assign_task():
         print(f"Database error: {e}")
         return jsonify({"success": False, "error": "Database error"}), 500
 
+@app.route('/add', methods=['POST'])
+def add_task():
+    """Add a new task with optional monthly action item link."""
+    if 'user_id' not in session:
+        return redirect(url_for('login'))
+
+    user_id = session['user_id']  # Get logged-in user's ID
+    description = request.form.get('description', '').strip()
+    priority = request.form.get('priority', 'Medium')
+    due_date = request.form.get('due_date', '').strip()
+    monthly_action_id = request.form.get('monthly_action_id')
+    recipients = request.form.get('recipients', '[]')  # Get recipients JSON
+
+    # Debug: Log form data and recipients
+    print("Form Data:", request.form)
+    print("Recipients JSON:", recipients)
+
+    # Parse recipients
+    try:
+        recipients = json.loads(recipients)
+        # Convert the list of names into a comma-separated string
+        assigned_person = ", ".join(recipient['name'] for recipient in recipients)
+    except json.JSONDecodeError:
+        assigned_person = ""  # Default to empty string if invalid JSON
+
+    if not description:
+        return "Error: Task description cannot be empty!", 400
+
+    try:
+        with get_db_connection() as conn:
+            cursor = conn.cursor()
+            # Retrieve assignee_id from assigned_person reference
+            if assigned_person:
+                cursor.execute(
+                    "SELECT id FROM users WHERE username = ?",
+                    (assigned_person,)
+                )
+                assignee_row = cursor.fetchone()
+                if not assignee_row:
+                    return "Error: Assigned person not found!", 400
+                assignee_id = assignee_row[0]
+            else:
+                assignee_id = None
+
+            # Check task assignment hierarchy if assignee_id is provided
+            if assignee_id:
+                # Get assigner's role
+                cursor.execute(
+                    "SELECT role FROM users WHERE id = ?",
+                    (user_id,)
+                )
+                assigner_role = cursor.fetchone()[0]
+
+                # Get assignee's role
+                cursor.execute(
+                    "SELECT role FROM users WHERE id = ?",
+                    (assignee_id,)
+                )
+                assignee_role = cursor.fetchone()[0]
+
+                # Check if assignment is allowed based on hierarchy
+                cursor.execute(
+                    """
+                    SELECT r1.role_level as assigner_level, r2.role_level as assignee_level
+                    FROM user_roles r1, user_roles r2
+                    WHERE r1.role_name = ? AND r2.role_name = ?
+                    """,
+                    (assigner_role, assignee_role),
+                )
+                levels = cursor.fetchone()
+                if not levels or levels[0] > levels[1]:
+                    return "Error: Invalid task assignment hierarchy", 403
+
+            # Insert the task into the database
+            cursor.execute(
+                """
+                INSERT INTO tasks (
+                    user_id, assigned_person, description, priority, due_date, 
+                    status, monthly_action_id, assigned_by, requires_approval, approved_by
+                ) VALUES (?, ?, ?, ?, ?, 'Open', ?, ?, ?, ?)
+                """,
+                (
+                    assignee_id if assignee_id else user_id,
+                    assigned_person,
+                    description,
+                    priority,
+                    due_date,
+                    monthly_action_id,
+                    user_id,
+                    1 if assignee_id else 0,  # Requires approval if assigned to someone else
+                    user_id  # The original task assigner as the approver
+                ),
+            )
+            conn.commit()
+
+        return redirect(url_for('home'))
+    except sqlite3.Error as e:
+        print(f"Database error: {e}")
+        return "Error: Unable to add task to the database.", 500
+    
 @app.route('/approve-task/<int:task_id>', methods=['POST'])
 def approve_task(task_id):
     """Approve or reject an approval request for a task from the task assigner."""
@@ -661,8 +761,7 @@ def update_task(task_id):
         print(f"Database error: {e}")
         return "Error: Unable to update task.", 500
 
-
-
+ 
 @app.route('/delete/<int:task_id>', methods=['POST'])
 def delete_task(task_id):
     """Delete a specific task for the logged-in user."""
@@ -698,7 +797,6 @@ def delete_task(task_id):
         print(f"Database error: {e}")
         flash("Error: Unable to delete task.", "error")
         return redirect(url_for('home'))
-
 
  
 @app.route('/fetch', methods=['GET'])
@@ -1237,16 +1335,18 @@ def monthly_progress_data():
         print(f"Database error: {e}")
         return jsonify({"error": "Failed to fetch progress data."}), 500
     
-@app.route('/upload_monthly_actions', methods=['POST'])
-def upload_monthly_actions():
-    """Upload and process monthly action items for the logged-in user."""
+@app.route('/upload_tasks', methods=['POST'])
+def upload_tasks():
+    """Upload and process tasks from Excel/CSV file for the logged-in user."""
     if 'user_id' not in session:
-        return "Error: Unauthorized access.", 401
+        flash("Error: Please login first.", "error")
+        return redirect(url_for('login'))
 
     user_id = session['user_id']
     file = request.files.get('file')
     if not file:
-        return "Error: No file uploaded.", 400
+        flash("Error: No file uploaded.", "error")
+        return redirect(url_for('home'))
     
     try:
         # Determine file type and read into DataFrame
@@ -1255,54 +1355,258 @@ def upload_monthly_actions():
         elif file.filename.endswith(('.xls', '.xlsx')):
             df = pd.read_excel(file)
         else:
-            return "Error: Invalid file format. Please upload an Excel or CSV file.", 400
+            flash("Error: Invalid file format. Please upload an Excel or CSV file.", "error")
+            return redirect(url_for('home'))
         
-        # Normalize column names
+        # Normalize column names (case insensitive)
         df.columns = [col.strip().lower() for col in df.columns]
         
-        # Validate required columns
-        required_columns = {'description', 'priority', 'due_date', 'notes'}
-        if not required_columns.issubset(df.columns):
-            return f"Error: Missing required columns. Required columns are {', '.join(required_columns)}.", 400
+        # Validate required column (only description is mandatory)
+        if 'description' not in df.columns:
+            flash("Error: Missing required column 'description'.", "error")
+            return redirect(url_for('home'))
         
-        # Clean and validate data
-        invalid_rows = []
-        for index, row in df.iterrows():
-            # Validate required fields
-            if pd.isna(row['description']) or pd.isna(row['priority']):
-                invalid_rows.append(index + 1)
-                continue
+        # Connect to database
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        
+        success_count = 0
+        error_rows = []
+        
+        # Start a transaction
+        conn.execute("BEGIN")
+        
+        try:
+            # Process each row in the DataFrame
+            for index, row in df.iterrows():
+                try:
+                    # Only description is mandatory
+                    if pd.isna(row['description']) or str(row['description']).strip() == '':
+                        error_rows.append(index + 1)
+                        continue
 
-            # Validate date
-            try:
-                row['due_date'] = pd.to_datetime(row['due_date']).date() if not pd.isna(row['due_date']) else None
-            except ValueError:
-                invalid_rows.append(index + 1)
-                continue
-            
-            # Ensure priority is valid
-            if str(row['priority']).capitalize() not in ['High', 'Medium', 'Low']:
-                invalid_rows.append(index + 1)
-                continue
-            
-            # Prepare row for insertion
-            with get_db_connection() as conn:
-                cursor = conn.cursor()
-                cursor.execute('''
-                    INSERT INTO monthly_action_items 
-                    (description, priority, due_date, notes, status)
-                    VALUES (?, ?, ?, ?, 'Open')
-                ''', (row['description'], row['priority'].capitalize(), row['due_date'], row['notes']))
-                conn.commit()
+                    # Priority handling (optional)
+                    priority = 'Medium'  # Default priority
+                    if 'priority' in df.columns and not pd.isna(row['priority']):
+                        priority_val = str(row['priority']).strip().lower()
+                        if priority_val in ['high', 'h']:
+                            priority = 'High'
+                        elif priority_val in ['medium', 'm', 'med']:
+                            priority = 'Medium'
+                        elif priority_val in ['low', 'l']:
+                            priority = 'Low'
 
-        # Return success and invalid row information
-        if invalid_rows:
-            return f"Upload completed with errors. Invalid rows: {invalid_rows}", 200
+                    # Due date handling (optional)
+                    due_date = None
+                    if 'due_date' in df.columns and not pd.isna(row['due_date']):
+                        try:
+                            date_formats = [
+                                '%Y-%m-%d', '%d-%m-%Y', '%m-%d-%Y',
+                                '%Y/%m/%d', '%d/%m/%Y', '%m/%d/%Y',
+                                '%d.%m.%Y', '%m.%d.%Y', '%Y.%m.%d',
+                                '%b %d %Y', '%B %d %Y',
+                                '%d %b %Y', '%d %B %Y'
+                            ]
+                            
+                            date_str = str(row['due_date']).strip()
+                            for fmt in date_formats:
+                                try:
+                                    due_date = pd.to_datetime(date_str, format=fmt).strftime('%Y-%m-%d')
+                                    break
+                                except:
+                                    continue
+                            
+                            if due_date is None:
+                                due_date = pd.to_datetime(date_str).strftime('%Y-%m-%d')
+                        except:
+                            due_date = None
+
+                    # Assigned person handling (optional)
+                    assigned_person = None
+                    assignee_id = None
+                    if 'assigned_person' in df.columns and not pd.isna(row['assigned_person']):
+                        assigned_person = str(row['assigned_person']).strip()
+                        cursor.execute("""
+                            SELECT id FROM users 
+                            WHERE LOWER(username) = LOWER(?)
+                        """, (assigned_person,))
+                        assignee_row = cursor.fetchone()
+                        if assignee_row:
+                            assignee_id = assignee_row[0]
+
+                    # Insert task into database
+                    cursor.execute("""
+                        INSERT INTO tasks (
+                            user_id, assigned_person, description, priority, due_date, 
+                            status, monthly_action_id, assigned_by, requires_approval, approved_by
+                        ) VALUES (?, ?, ?, ?, ?, 'Open', ?, ?, ?, ?)
+                    """, (
+                        assignee_id if assignee_id else user_id,
+                        assigned_person,
+                        str(row['description']).strip(),
+                        priority,
+                        due_date,
+                        row.get('monthly_action_id', None) if 'monthly_action_id' in df.columns else None,
+                        user_id,
+                        1 if assignee_id else 0,
+                        user_id
+                    ))
+                    success_count += 1
+                    
+                except Exception as e:
+                    error_rows.append(index + 1)
+                    continue
+            
+            # Commit the transaction if all went well
+            conn.commit()
+            
+            if success_count > 0:
+                flash(f"Success: {success_count} tasks uploaded successfully.", "success")
+            
+            if error_rows:
+                flash(f"Error: Failed to process rows: {', '.join(map(str, error_rows))}.", "error")
+            
+        except Exception as e:
+            conn.rollback()
+            flash("Error: Database error occurred.", "error")
+        
+        finally:
+            conn.close()
+        
+        return redirect(url_for('home'))
+        
+    except Exception as e:
+        flash("Error: Failed to process file.", "error")
+        return redirect(url_for('home'))
+
+@app.route('/upload_monthly_actions', methods=['POST'])
+def upload_monthly_actions():
+    """Upload and process monthly action items for the logged-in user."""
+    if 'user_id' not in session:
+        flash("Error: Please login first.", "error")
+        return redirect(url_for('login'))
+
+    user_id = session['user_id']
+    file = request.files.get('file')
+    if not file:
+        flash("Error: No file uploaded.", "error")
+        return redirect(url_for('monthly_action'))
+    
+    try:
+        # Determine file type and read into DataFrame
+        if file.filename.endswith('.csv'):
+            df = pd.read_csv(file)
+        elif file.filename.endswith(('.xls', '.xlsx')):
+            df = pd.read_excel(file)
+        else:
+            flash("Error: Invalid file format. Please upload an Excel or CSV file.", "error")
+            return redirect(url_for('monthly_action'))
+        
+        # Normalize column names (case insensitive)
+        df.columns = [col.strip().lower() for col in df.columns]
+        
+        # Validate required column (only description is mandatory)
+        if 'description' not in df.columns:
+            flash("Error: Missing required column 'description'.", "error")
+            return redirect(url_for('monthly_action'))
+        
+        # Connect to database
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        
+        success_count = 0
+        error_rows = []
+        
+        # Start a transaction
+        conn.execute("BEGIN")
+        
+        try:
+            # Process each row in the DataFrame
+            for index, row in df.iterrows():
+                try:
+                    # Only description is mandatory
+                    if pd.isna(row['description']) or str(row['description']).strip() == '':
+                        error_rows.append(index + 1)
+                        continue
+
+                    # Priority handling (optional)
+                    priority = 'Medium'  # Default priority
+                    if 'priority' in df.columns and not pd.isna(row['priority']):
+                        priority_val = str(row['priority']).strip().lower()
+                        if priority_val in ['high', 'h']:
+                            priority = 'High'
+                        elif priority_val in ['medium', 'm', 'med']:
+                            priority = 'Medium'
+                        elif priority_val in ['low', 'l']:
+                            priority = 'Low'
+
+                    # Due date handling (optional)
+                    due_date = None
+                    if 'due_date' in df.columns and not pd.isna(row['due_date']):
+                        try:
+                            date_formats = [
+                                '%Y-%m-%d', '%d-%m-%Y', '%m-%d-%Y',
+                                '%Y/%m/%d', '%d/%m/%Y', '%m/%d/%Y',
+                                '%d.%m.%Y', '%m.%d.%Y', '%Y.%m.%d',
+                                '%b %d %Y', '%B %d %Y',
+                                '%d %b %Y', '%d %B %Y'
+                            ]
+                            
+                            date_str = str(row['due_date']).strip()
+                            for fmt in date_formats:
+                                try:
+                                    due_date = pd.to_datetime(date_str, format=fmt).strftime('%Y-%m-%d')
+                                    break
+                                except:
+                                    continue
+                            
+                            if due_date is None:
+                                due_date = pd.to_datetime(date_str).strftime('%Y-%m-%d')
+                        except:
+                            due_date = None
+
+                    # Notes handling (optional)
+                    notes = str(row['notes']).strip() if 'notes' in df.columns and not pd.isna(row['notes']) else None
+
+                    # Insert monthly action into database
+                    cursor.execute("""
+                        INSERT INTO monthly_action_items 
+                        (user_id, description, priority, status, due_date, notes, percentage_completion)
+                        VALUES (?, ?, ?, 'Open', ?, ?, 0)
+                    """, (
+                        user_id,
+                        str(row['description']).strip(),
+                        priority,
+                        due_date,
+                        notes
+                    ))
+                    success_count += 1
+                    
+                except Exception as e:
+                    error_rows.append(index + 1)
+                    continue
+            
+            # Commit the transaction if all went well
+            conn.commit()
+            
+            if success_count > 0:
+                flash(f"Success: {success_count} monthly actions uploaded successfully.", "success")
+            
+            if error_rows:
+                flash(f"Error: Failed to process rows: {', '.join(map(str, error_rows))}.", "error")
+            
+        except Exception as e:
+            conn.rollback()
+            flash("Error: Database error occurred.", "error")
+        
+        finally:
+            conn.close()
         
         return redirect(url_for('monthly_action'))
+        
     except Exception as e:
-        print(f"Error processing file: {e}")
-        return f"Error: Unable to process the uploaded file. Details: {str(e)}", 500
+        flash("Error: Failed to process file.", "error")
+        return redirect(url_for('monthly_action'))
  
 @app.route('/task_charts')
 def task_charts():
