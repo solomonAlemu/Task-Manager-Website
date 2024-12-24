@@ -118,6 +118,8 @@ def init_db():
             notes TEXT DEFAULT '',
             percentage_completion INTEGER DEFAULT 0 CHECK(percentage_completion BETWEEN 0 AND 100),
             created_at TEXT DEFAULT (DATETIME('now', 'localtime')),
+            semi_annual_plan_id INTEGER,
+            target_portion REAL DEFAULT 0,
             FOREIGN KEY(semi_annual_plan_id) REFERENCES semi_annual_plans(id),
             FOREIGN KEY(user_id) REFERENCES users(id)
         )
@@ -168,7 +170,34 @@ def init_db():
             FOREIGN KEY(approved_by) REFERENCES users(id)
         )
         ''')
+        # Add a trigger to update semi-annual plan progress
+        cursor.execute('''
+        CREATE TRIGGER IF NOT EXISTS update_semi_annual_plan_progress
+        AFTER UPDATE ON monthly_action_items
+        WHEN NEW.status = 'Completed' AND OLD.status != 'Completed'
+        BEGIN
+            UPDATE semi_annual_plans
+            SET current_value = (
+                SELECT COALESCE(SUM(target_portion), 0)
+                FROM monthly_action_items
+                WHERE semi_annual_plan_id = NEW.semi_annual_plan_id
+                AND status = 'Completed'
+            ),
+            percentage_completion = (
+                SELECT ROUND(COALESCE(SUM(target_portion), 0) * 100.0 / target_value)
+                FROM monthly_action_items
+                WHERE semi_annual_plan_id = NEW.semi_annual_plan_id
+                AND status = 'Completed'
+            )
+            WHERE id = NEW.semi_annual_plan_id;
 
+            -- Auto-complete semi-annual plan if target is reached
+            UPDATE semi_annual_plans
+            SET status = 'Completed'
+            WHERE id = NEW.semi_annual_plan_id
+            AND current_value >= target_value;
+        END;
+        ''')
         # Commit all changes
         conn.commit()
 # Initialize the database if not already done
@@ -1077,6 +1106,7 @@ def delete_historical_tasks():
         print(f"Database error: {e}")
         return jsonify({"success": False, "error": "Unable to delete tasks."}), 500
 
+# 2. Route Updates (in server.py)
 @app.route('/monthly-action', methods=['GET', 'POST'])
 def monthly_action():
     """Manage monthly action items for the logged-in user."""
@@ -1084,38 +1114,69 @@ def monthly_action():
         return redirect(url_for('login'))
     
     user_id = session['user_id']
+    
     if request.method == 'POST':
         description = request.form.get('description')
         priority = request.form.get('priority', 'Medium')
         due_date = request.form.get('due_date')
         notes = request.form.get('notes', '')
-
+        semi_annual_plan_id = request.form.get('semi_annual_plan_id')
+        target_portion = request.form.get('target_portion', 0)
         if not description:
             return "Description is required.", 400
 
         try:
-            with sqlite3.connect(DATABASE) as conn:
+            target_portion = float(target_portion)
+            
+            with get_db_connection() as conn:
                 cursor = conn.cursor()
+                
+                # Validate target portion against remaining plan target
+                if semi_annual_plan_id:
+                    cursor.execute('''
+                        SELECT target_value, current_value,
+                        (SELECT COALESCE(SUM(target_portion), 0)
+                         FROM monthly_action_items
+                         WHERE semi_annual_plan_id = ?)
+                        as allocated_portions
+                        FROM semi_annual_plans WHERE id = ?
+                    ''', (semi_annual_plan_id, semi_annual_plan_id))
+                    
+                    plan_data = cursor.fetchone()
+                    if plan_data:
+                        total_target = plan_data[0]
+                        allocated = plan_data[2]
+                        remaining = total_target - allocated
+                        
+                        if target_portion > remaining:
+                            return "Error: Target portion exceeds remaining plan target.", 400
+
                 cursor.execute('''
-                    INSERT INTO monthly_action_items (user_id, description, priority, due_date, notes, status)
-                    VALUES (?, ?, ?, ?, ?, 'Open')
-                ''', (user_id, description, priority, due_date, notes))
+                    INSERT INTO monthly_action_items 
+                    (user_id, description, priority, due_date, notes, status, semi_annual_plan_id, target_portion)
+                    VALUES (?, ?, ?, ?, ?, 'Open', ?, ?)
+                ''', (user_id, description, priority, due_date, notes, semi_annual_plan_id, target_portion))
+                
                 conn.commit()
             return redirect(url_for('monthly_action'))
-        except sqlite3.Error as e:
-            print(f"Database error: {e}")
-            return "Error: Unable to add action item.", 500
+            
+        except (ValueError, sqlite3.Error) as e:
+            print(f"Error: {e}")
+            return "Error: Invalid input or database error.", 500
 
-    # Fetch existing monthly action items
+    # Fetch active semi-annual plans for the dropdown
     try:
         with get_db_connection() as conn:
             cursor = conn.cursor()
             
             # Fetch semi-annual plans for the dropdown
             cursor.execute('''
-                SELECT id, title 
-                FROM semi_annual_plans 
-                WHERE user_id = ? AND status != 'Completed'
+                SELECT sp.id, sp.title, sp.target_value,
+                (SELECT COALESCE(SUM(target_portion), 0)
+                 FROM monthly_action_items
+                 WHERE semi_annual_plan_id = sp.id) as allocated_portions
+                FROM semi_annual_plans sp
+                WHERE sp.user_id = ? AND sp.status != 'Completed'
             ''', (user_id,))
             semi_annual_plans = cursor.fetchall()
             
@@ -1141,37 +1202,40 @@ def monthly_action():
             
             # Fetch existing monthly actions
             cursor.execute('''
-                SELECT m.*, s.title as plan_title
-                FROM monthly_action_items m
-                LEFT JOIN semi_annual_plans s ON m.semi_annual_plan_id = s.id
-                WHERE m.user_id = ? AND m.status NOT IN ('Completed', 'Cancelled')
-                ORDER BY m.created_at DESC
+                SELECT ma.*, sp.title as plan_title, sp.target_value
+                FROM monthly_action_items ma
+                LEFT JOIN semi_annual_plans sp ON ma.semi_annual_plan_id = sp.id
+                WHERE ma.user_id = ? AND ma.status NOT IN ('Completed', 'Cancelled')
+                ORDER BY ma.created_at DESC
             ''', (user_id,))
             monthly_actions = cursor.fetchall()
             
-            return render_template('monthly_action.html', 
-                                 monthly_actions=monthly_actions,
-                                 semi_annual_plans=semi_annual_plans)
-                                 
+        return render_template('monthly_action.html', 
+                             monthly_actions=monthly_actions,
+                             semi_annual_plans=semi_annual_plans)
+                             
     except sqlite3.Error as e:
-        flash(f'Database error: {str(e)}', 'error')
-        return redirect(url_for('monthly_action'))
+        print(f"Database error: {e}")
+        return "Error: Unable to fetch data.", 500
+ 
 @app.route('/update_monthly_action/<int:action_id>', methods=['POST'])
 def update_monthly_action(action_id):
-    """Update a monthly action status."""
+    """Update a monthly action status and handle target portion updates."""
     if 'user_id' not in session:
         return redirect(url_for('login'))    
     user_id = session['user_id']    
     
     status = request.form.get('status', 'Open')
-    percentage_completion = request.form.get('percentage_completion').strip()
+    percentage_completion = request.form.get('percentage_completion', '').strip()
     notes = request.form.get('notes', '').strip()
     description = request.form.get('revised_description', '').strip()
     priority = request.form.get('priority', 'Medium')
     due_date = request.form.get('due_date', '').strip()
+    target_portion = request.form.get('target_portion', '').strip()
    
     
     try:
+        # Handle percentage completion
         if percentage_completion:
             try:
                 percentage_completion = int(percentage_completion)
@@ -1182,37 +1246,61 @@ def update_monthly_action(action_id):
         else:
             # Handle the case where the value is empty
             percentage_completion = None
-            # You can also add logging or an error message here
+
+        # Handle target portion
+        if target_portion:
+            try:
+                target_portion = float(target_portion)
+            except ValueError:
+                target_portion = None
+        else:
+            target_portion = None
 
         with get_db_connection() as conn:
             cursor = conn.cursor()
-            # Fetch the existing action
-            # Execute SQL query to fetch the existing action details
+            
+            # Fetch the existing action with semi-annual plan details
             cursor.execute("""
-                SELECT description, status, notes, percentage_completion
-                FROM monthly_action_items 
-                WHERE id = ? AND user_id = ?
+                SELECT ma.description, ma.priority, ma.status, ma.due_date, ma.notes, 
+                       ma.percentage_completion, ma.semi_annual_plan_id, ma.target_portion,
+                       sp.target_value, 
+                       (SELECT COALESCE(SUM(target_portion), 0)
+                        FROM monthly_action_items
+                        WHERE semi_annual_plan_id = ma.semi_annual_plan_id
+                        AND id != ma.id) as other_portions
+                FROM monthly_action_items ma
+                LEFT JOIN semi_annual_plans sp ON ma.semi_annual_plan_id = sp.id
+                WHERE ma.id = ? AND ma.user_id = ?
             """, (action_id, user_id))
             
             # Fetch one result from the query
             action = cursor.fetchone()
-
-            # Fetch the existing task
-            cursor.execute("""
-                SELECT  description, priority, status, due_date, notes, percentage_completion 
-                FROM monthly_action_items 
-                WHERE id = ? AND user_id = ?
-            """, (action_id, user_id))
-            action = cursor.fetchone()
-
             if not action:
                 return "Error: action not found or unauthorized.", 404
-            current_description, current_priority, current_status, current_due_date, current_notes, current_percentage_completion  = action
-            # Append new notes to updates
+
+            (current_description, current_priority, current_status, current_due_date, 
+             current_notes, current_percentage, semi_annual_plan_id, current_target_portion,
+             plan_target_value, other_portions) = action
+
+            # Validate target portion if it's being updated
+            if target_portion is not None and semi_annual_plan_id:
+                available_target = plan_target_value - other_portions
+                if target_portion > available_target:
+                    return f"Error: Target portion ({target_portion}) exceeds available target ({available_target}).", 400
+
+            # Use current values if new ones aren't provided
+            description = description or current_description
+            status = status if status != "Open" else current_status
+            priority = priority or current_priority
+            due_date = due_date or current_due_date
+            target_portion = target_portion if target_portion is not None else current_target_portion
+            percentage_completion = percentage_completion if percentage_completion is not None else current_percentage
+
+            # Create update entry for notes
             update_entry = (
                 (current_notes or "") +
                 f"\n\n== Update ({datetime.now().strftime('%Y-%m-%d %H:%M')})\n"
-                f"{notes or 'No notes'} | Status: {status}\n"
+                f"{notes or 'No notes'} | Status: {status}"
             )
             if not description: 
                 description = current_description
@@ -1224,14 +1312,46 @@ def update_monthly_action(action_id):
                 priority = current_priority    
             if  not due_date: 
                 due_date = current_due_date    
-                                                              
+            if target_portion != current_target_portion:
+                update_entry += f" | Target Portion: {target_portion}"
+            update_entry += "\n"
+
+            # Update the monthly action
             cursor.execute("""
                 UPDATE monthly_action_items
-                SET description = ?, priority = ?, status = ?, due_date = ?, notes = ?, percentage_completion = ?
+                SET description = ?, priority = ?, status = ?, due_date = ?, 
+                    notes = ?, percentage_completion = ?, target_portion = ?
                 WHERE id = ? AND user_id = ?
-            """, (description, priority, status, due_date, notes, percentage_completion, action_id, user_id))
-            conn.commit()
+            """, (description, priority, status, due_date, update_entry, 
+                  percentage_completion, target_portion, action_id, user_id))
 
+            # If status changed to 'Completed', update semi-annual plan progress
+            if status == 'Completed' and current_status != 'Completed' and semi_annual_plan_id:
+                cursor.execute("""
+                    UPDATE semi_annual_plans
+                    SET current_value = (
+                        SELECT COALESCE(SUM(target_portion), 0)
+                        FROM monthly_action_items
+                        WHERE semi_annual_plan_id = ? AND status = 'Completed'
+                    ),
+                    percentage_completion = (
+                        SELECT ROUND(COALESCE(SUM(target_portion), 0) * 100.0 / target_value)
+                        FROM monthly_action_items
+                        WHERE semi_annual_plan_id = ? AND status = 'Completed'
+                    )
+                    WHERE id = ?
+                """, (semi_annual_plan_id, semi_annual_plan_id, semi_annual_plan_id))
+
+                # Check if plan should be auto-completed
+                cursor.execute("""
+                    UPDATE semi_annual_plans
+                    SET status = 'Completed'
+                    WHERE id = ?
+                    AND current_value >= target_value
+                    AND status != 'Completed'
+                """, (semi_annual_plan_id,))
+
+            conn.commit()
 
         return redirect(url_for('monthly_action'))
     except sqlite3.Error as e:
@@ -1294,6 +1414,7 @@ def semi_annual_plans():
     # Fetch existing plans
     try:
         with get_db_connection() as conn:
+            conn.row_factory = sqlite3.Row
             cursor = conn.cursor()
             cursor.execute('''
                 SELECT id, title, description, target_value, current_value, 
@@ -1304,22 +1425,27 @@ def semi_annual_plans():
             ''', (user_id,))
             plans = cursor.fetchall()
             
-            # Fetch monthly actions for each plan
+            # Convert plans to list of dictionaries and add action stats
+            plans_with_stats = []
             for plan in plans:
+                # Convert Row object to dictionary
+                plan_dict = dict(plan)
+                
                 cursor.execute('''
                     SELECT COUNT(*) as total_actions,
                            SUM(CASE WHEN status = 'Completed' THEN 1 ELSE 0 END) as completed_actions
                     FROM monthly_action_items
                     WHERE semi_annual_plan_id = ?
-                ''', (plan['id'],))
+                ''', (plan_dict['id'],))
                 stats = cursor.fetchone()
-                plan['action_stats'] = stats
+                plan_dict['action_stats'] = dict(stats)
+                plans_with_stats.append(plan_dict)
     
     except sqlite3.Error as e:
         flash(f'Error fetching plans: {str(e)}', 'error')
-        plans = []
+        plans_with_stats = []
     
-    return render_template('semi_annual_plans.html', plans=plans)
+    return render_template('semi_annual_plans.html', plans=plans_with_stats)
 
 @app.route('/update_semi_annual_plan/<int:plan_id>', methods=['POST'])
 def update_semi_annual_plan(plan_id):

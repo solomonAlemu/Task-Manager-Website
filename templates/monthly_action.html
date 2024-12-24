@@ -37,13 +37,22 @@
 			<!-- Add this inside the form in the taskFormSection -->
 			<div class="form-group">
 			    <label for="semi_annual_plan">Semi-Annual Plan (Optional)</label>
-			    <select name="semi_annual_plan_id" id="semi_annual_plan">
+			    <select name="semi_annual_plan_id" id="semi_annual_plan" onchange="updateTargetInfo()">
 			        <option value="">None</option>
 			        {% for plan in semi_annual_plans %}
-			        <option value="{{ plan.id }}">{{ plan.title }}</option>
+			        <option value="{{ plan.id }}" 
+			                data-target="{{ plan.target_value }}"
+			                data-allocated="{{ plan.allocated_portions }}">
+			            {{ plan.title }} (Remaining: {{ plan.target_value - plan.allocated_portions }} units)
+			        </option>
 			        {% endfor %}
 			    </select>
-			</div>			
+			</div>		
+			<div class="form-group" id="target_portion_group" style="display: none;">
+			    <label for="target_portion">Target Portion</label>
+			    <input type="number" name="target_portion" id="target_portion" step="0.01" min="0">
+			    <span id="target_info"></span>
+			</div>				
             <button type="submit" onclick="return confirm('Are you sure you want to add this item?')">Add Monthly Action Item</button>
         </form>
     </section>
@@ -290,7 +299,44 @@
             // Insert the formatted text into the specified element
             document.getElementById(elementId).innerHTML = formattedText;
         }
+		function updateTargetInfo() {
+		    const planSelect = document.getElementById('semi_annual_plan');
+		    const targetGroup = document.getElementById('target_portion_group');
+		    const targetInput = document.getElementById('target_portion');
+		    const targetInfo = document.getElementById('target_info');
+		    
+		    if (planSelect.value) {
+		        const option = planSelect.selectedOptions[0];
+		        const target = parseFloat(option.dataset.target);
+		        const allocated = parseFloat(option.dataset.allocated);
+		        const remaining = target - allocated;
+		        
+		        targetGroup.style.display = 'block';
+		        targetInput.max = remaining;
+		        targetInfo.textContent = `Available: ${remaining} units`;
+		    } else {
+		        targetGroup.style.display = 'none';
+		    }
+		}
 
+		// Validate target portion on form submission
+		document.getElementById('addTaskForm').addEventListener('submit', function(e) {
+		    const planSelect = document.getElementById('semi_annual_plan');
+		    const targetInput = document.getElementById('target_portion');
+		    
+		    if (planSelect.value) {
+		        const option = planSelect.selectedOptions[0];
+		        const target = parseFloat(option.dataset.target);
+		        const allocated = parseFloat(option.dataset.allocated);
+		        const remaining = target - allocated;
+		        const portion = parseFloat(targetInput.value) || 0;
+		        
+		        if (portion > remaining) {
+		            e.preventDefault();
+		            alert(`Target portion cannot exceed remaining target (${remaining} units)`);
+		        }
+		    }
+		});
         document.addEventListener('DOMContentLoaded', () => {
             document.querySelectorAll('.updates').forEach((cell, index) => {
                 // Assign a unique ID to each cell if it doesn't have one
