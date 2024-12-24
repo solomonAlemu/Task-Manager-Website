@@ -1,0 +1,122 @@
+{% extends 'base.html' %}
+
+{% block content %}
+<div class="container">
+    <section>
+        <h2>Semi-Annual Plans & Targets</h2>
+        <button id="showFormButton" type="button" class="show-btn">Add New Plan</button>
+    </section>
+
+    <!-- Plan Creation Form -->
+    <section id="planFormSection" style="display: none;">
+        <h3>Create Semi-Annual Plan</h3>
+        <form id="addPlanForm" action="{{ url_for('semi_annual_plans') }}" method="post">
+            <div class="form-group">
+                <label for="title">Title</label>
+                <input type="text" name="title" id="title" required>
+            </div>
+            <div class="form-group">
+                <label for="description">Description</label>
+                <textarea name="description" id="description" required></textarea>
+            </div>
+            <div class="form-group">
+                <label for="target_value">Target Value</label>
+                <input type="number" name="target_value" id="target_value" step="0.01" required>
+            </div>
+            <div class="form-group">
+                <label for="start_date">Start Date</label>
+                <input type="date" name="start_date" id="start_date" required>
+            </div>
+            <div class="form-group">
+                <label for="end_date">End Date</label>
+                <input type="date" name="end_date" id="end_date" required>
+            </div>
+            <div class="form-group">
+                <label for="priority">Priority</label>
+                <select name="priority" id="priority">
+                    <option value="High">High</option>
+                    <option value="Medium" selected>Medium</option>
+                    <option value="Low">Low</option>
+                </select>
+            </div>
+            <div class="form-group">
+                <label for="notes">Notes</label>
+                <textarea name="notes" id="notes"></textarea>
+            </div>
+            <button type="submit">Create Plan</button>
+        </form>
+    </section>
+
+    <!-- Display Existing Plans -->
+    <section>
+        <h3>Current Plans</h3>
+        {% if plans %}
+        <table class="action-list">
+            <thead>
+                <tr>
+                    <th>Title</th>
+                    <th>Description</th>
+                    <th>Target</th>
+                    <th>Progress</th>
+                    <th>Timeline</th>
+                    <th>Priority</th>
+                    <th>Status</th>
+                    <th>Actions</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for plan in plans %}
+                <tr>
+                    <td>{{ plan.title }}</td>
+                    <td>{{ plan.description }}</td>
+                    <td>{{ plan.target_value }}</td>
+                    <td>
+                        {{ plan.current_value }}/{{ plan.target_value }}
+                        ({{ plan.percentage_completion }}%)
+                    </td>
+                    <td>
+                        {{ plan.start_date }} to {{ plan.end_date }}
+                    </td>
+                    <td>{{ plan.priority }}</td>
+                    <td>{{ plan.status }}</td>
+                    <td>
+                        <button type="button" onclick="toggleUpdateForm('{{ plan.id }}')" class="show-btn">Update</button>
+                        
+                        <!-- Update Form -->
+                        <form id="updateForm{{ plan.id }}" style="display: none;" 
+                              action="{{ url_for('update_semi_annual_plan', plan_id=plan.id) }}" method="post">
+                            <select name="status" required>
+                                <option value="Open" {% if plan.status == 'Open' %}selected{% endif %}>Open</option>
+                                <option value="In Progress" {% if plan.status == 'In Progress' %}selected{% endif %}>In Progress</option>
+                                <option value="Completed" {% if plan.status == 'Completed' %}selected{% endif %}>Completed</option>
+                            </select>
+                            <input type="number" name="current_value" placeholder="Current Value" 
+                                   value="{{ plan.current_value }}" step="0.01">
+                            <input type="number" name="percentage_completion" placeholder="Completion %" 
+                                   value="{{ plan.percentage_completion }}" min="0" max="100">
+                            <textarea name="notes" placeholder="Update notes...">{{ plan.notes }}</textarea>
+                            <button type="submit">Save Updates</button>
+                        </form>
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+        {% else %}
+        <p>No semi-annual plans found.</p>
+        {% endif %}
+    </section>
+</div>
+
+<script>
+document.getElementById("showFormButton").addEventListener("click", function() {
+    const formSection = document.getElementById("planFormSection");
+    formSection.style.display = formSection.style.display === "none" ? "block" : "none";
+});
+
+function toggleUpdateForm(planId) {
+    const form = document.getElementById(`updateForm${planId}`);
+    form.style.display = form.style.display === "none" ? "block" : "none";
+}
+</script>
+{% endblock %}

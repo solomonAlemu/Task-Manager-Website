@@ -23,7 +23,7 @@
 	        </div>
 	        <button type="submit" class="export-btn">Download CSV</button>
 	    </form>
-		<button id="uploadButton" type="button" class="export-btn">Upload Tasks</button>
+		<button id="showUpload" type="button" class="upload-btn">Upload Tasks</button>
 		<form id="uploadFormSection" action="{{ url_for('upload_tasks') }}" method="post" enctype="multipart/form-data" style="display: none;">
 		    <h3>Upload Tasks</h3>
 			<div class="format-info">
@@ -640,7 +640,7 @@
 	});
 	
 	// Show the form when the "Add Action" button is clicked
-	document.getElementById("uploadButton").addEventListener("click", function () {
+	document.getElementById("showUpload").addEventListener("click", function () {
 	    const formSection = document.getElementById("uploadFormSection");
 	    formSection.style.display = "block"; // Show the form section
 	    this.style.display = "none"; // Hide the "Add Action" button

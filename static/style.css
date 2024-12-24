@@ -390,7 +390,7 @@ textarea {
     border-radius: 5px;
 }
 .export-btn {
-    background-color: #4CAF50; /* Green background */
+    background-color: rgb(128, 128, 255); 
     color: white; /* White text */
     padding: 10px 20px; /* Padding for size */
     border: none; /* Remove default border */
@@ -402,7 +402,7 @@ textarea {
 }
 
 .export-btn:hover {
-    background-color: #45a049; /* Darker green on hover */
+    background-color: rgb(128, 128, 255); /* Darker green on hover */
     transform: scale(1.05); /* Slightly enlarge on hover */
 }
 
@@ -410,10 +410,7 @@ textarea {
     background-color: #3e8e41; /* Even darker green when clicked */
     transform: scale(0.95); /* Slightly shrink on click */
 }
-
-
-
-
+ 
 /* General Button Styles */
 #showfetchButton.btn-fetch {
     display: inline-block;

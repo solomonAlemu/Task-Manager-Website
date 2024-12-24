@@ -118,10 +118,31 @@ def init_db():
             notes TEXT DEFAULT '',
             percentage_completion INTEGER DEFAULT 0 CHECK(percentage_completion BETWEEN 0 AND 100),
             created_at TEXT DEFAULT (DATETIME('now', 'localtime')),
+            FOREIGN KEY(semi_annual_plan_id) REFERENCES semi_annual_plans(id),
             FOREIGN KEY(user_id) REFERENCES users(id)
         )
         ''')
 
+        # Add semi-annual action plans table
+        cursor.execute('''
+        CREATE TABLE IF NOT EXISTS semi_annual_plans (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            user_id INTEGER NOT NULL,
+            title TEXT NOT NULL,
+            description TEXT NOT NULL,
+            target_value REAL,
+            current_value REAL DEFAULT 0,
+            start_date TEXT NOT NULL,
+            end_date TEXT NOT NULL,
+            priority TEXT NOT NULL,
+            status TEXT NOT NULL DEFAULT 'Open',
+            notes TEXT DEFAULT '',
+            percentage_completion INTEGER DEFAULT 0 CHECK(percentage_completion BETWEEN 0 AND 100),
+            created_at TEXT DEFAULT (DATETIME('now', 'localtime')),
+            FOREIGN KEY(user_id) REFERENCES users(id)
+        )
+        ''')
+        
         # Tasks table with approval workflow
         cursor.execute('''
         CREATE TABLE IF NOT EXISTS tasks (
@@ -1061,6 +1082,7 @@ def monthly_action():
     """Manage monthly action items for the logged-in user."""
     if 'user_id' not in session:
         return redirect(url_for('login'))
+    
     user_id = session['user_id']
     if request.method == 'POST':
         description = request.form.get('description')
@@ -1086,20 +1108,54 @@ def monthly_action():
 
     # Fetch existing monthly action items
     try:
-        with sqlite3.connect(DATABASE) as conn:
+        with get_db_connection() as conn:
             cursor = conn.cursor()
+            
+            # Fetch semi-annual plans for the dropdown
             cursor.execute('''
-                SELECT id, description, priority, status, due_date, percentage_completion, notes
-                FROM monthly_action_items
-                WHERE user_id = ? AND status NOT IN ('Completed', 'Cancelled')
-                ORDER BY created_at DESC
+                SELECT id, title 
+                FROM semi_annual_plans 
+                WHERE user_id = ? AND status != 'Completed'
+            ''', (user_id,))
+            semi_annual_plans = cursor.fetchall()
+            
+            if request.method == 'POST':
+                description = request.form.get('description')
+                priority = request.form.get('priority', 'Medium')
+                due_date = request.form.get('due_date')
+                notes = request.form.get('notes', '')
+                semi_annual_plan_id = request.form.get('semi_annual_plan_id')
+                
+                if not description:
+                    flash('Description is required', 'error')
+                    return redirect(url_for('monthly_action'))
+                
+                cursor.execute('''
+                    INSERT INTO monthly_action_items 
+                    (user_id, description, priority, due_date, notes, status, semi_annual_plan_id)
+                    VALUES (?, ?, ?, ?, ?, 'Open', ?)
+                ''', (user_id, description, priority, due_date, notes, semi_annual_plan_id))
+                conn.commit()
+                flash('Monthly action created successfully!', 'success')
+                return redirect(url_for('monthly_action'))
+            
+            # Fetch existing monthly actions
+            cursor.execute('''
+                SELECT m.*, s.title as plan_title
+                FROM monthly_action_items m
+                LEFT JOIN semi_annual_plans s ON m.semi_annual_plan_id = s.id
+                WHERE m.user_id = ? AND m.status NOT IN ('Completed', 'Cancelled')
+                ORDER BY m.created_at DESC
             ''', (user_id,))
             monthly_actions = cursor.fetchall()
-        return render_template('monthly_action.html', monthly_actions=monthly_actions)
+            
+            return render_template('monthly_action.html', 
+                                 monthly_actions=monthly_actions,
+                                 semi_annual_plans=semi_annual_plans)
+                                 
     except sqlite3.Error as e:
-        print(f"Database error: {e}")
-        return "Error: Unable to fetch monthly action items.", 500
-  
+        flash(f'Database error: {str(e)}', 'error')
+        return redirect(url_for('monthly_action'))
 @app.route('/update_monthly_action/<int:action_id>', methods=['POST'])
 def update_monthly_action(action_id):
     """Update a monthly action status."""
@@ -1203,6 +1259,93 @@ def delete_monthly_action(action_id):
         print(f"Database error: {e}")
         return "Error: Unable to delete monthly action item.", 500
 
+# Add new route handlers
+@app.route('/semi-annual-plans', methods=['GET', 'POST'])
+def semi_annual_plans():
+    if 'user_id' not in session:
+        return redirect(url_for('login'))
+    
+    user_id = session['user_id']
+    
+    if request.method == 'POST':
+        title = request.form.get('title')
+        description = request.form.get('description')
+        target_value = request.form.get('target_value')
+        start_date = request.form.get('start_date')
+        end_date = request.form.get('end_date')
+        priority = request.form.get('priority', 'Medium')
+        notes = request.form.get('notes', '')
+        
+        try:
+            with get_db_connection() as conn:
+                cursor = conn.cursor()
+                cursor.execute('''
+                    INSERT INTO semi_annual_plans 
+                    (user_id, title, description, target_value, start_date, end_date, priority, notes)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                ''', (user_id, title, description, target_value, start_date, end_date, priority, notes))
+                conn.commit()
+                flash('Semi-annual plan created successfully!', 'success')
+        except sqlite3.Error as e:
+            flash(f'Error creating plan: {str(e)}', 'error')
+        
+        return redirect(url_for('semi_annual_plans'))
+    
+    # Fetch existing plans
+    try:
+        with get_db_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute('''
+                SELECT id, title, description, target_value, current_value, 
+                       start_date, end_date, priority, status, notes, percentage_completion
+                FROM semi_annual_plans
+                WHERE user_id = ? AND status != 'Completed'
+                ORDER BY created_at DESC
+            ''', (user_id,))
+            plans = cursor.fetchall()
+            
+            # Fetch monthly actions for each plan
+            for plan in plans:
+                cursor.execute('''
+                    SELECT COUNT(*) as total_actions,
+                           SUM(CASE WHEN status = 'Completed' THEN 1 ELSE 0 END) as completed_actions
+                    FROM monthly_action_items
+                    WHERE semi_annual_plan_id = ?
+                ''', (plan['id'],))
+                stats = cursor.fetchone()
+                plan['action_stats'] = stats
+    
+    except sqlite3.Error as e:
+        flash(f'Error fetching plans: {str(e)}', 'error')
+        plans = []
+    
+    return render_template('semi_annual_plans.html', plans=plans)
+
+@app.route('/update_semi_annual_plan/<int:plan_id>', methods=['POST'])
+def update_semi_annual_plan(plan_id):
+    if 'user_id' not in session:
+        return redirect(url_for('login'))
+    
+    user_id = session['user_id']
+    status = request.form.get('status')
+    current_value = request.form.get('current_value')
+    notes = request.form.get('notes')
+    percentage_completion = request.form.get('percentage_completion')
+    
+    try:
+        with get_db_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute('''
+                UPDATE semi_annual_plans
+                SET status = ?, current_value = ?, notes = ?, percentage_completion = ?
+                WHERE id = ? AND user_id = ?
+            ''', (status, current_value, notes, percentage_completion, plan_id, user_id))
+            conn.commit()
+            flash('Plan updated successfully!', 'success')
+    except sqlite3.Error as e:
+        flash(f'Error updating plan: {str(e)}', 'error')
+    
+    return redirect(url_for('semi_annual_plans'))
 
 @app.route('/monthly-progress')
 def monthly_progress():
