@@ -1473,6 +1473,163 @@ def update_semi_annual_plan(plan_id):
     
     return redirect(url_for('semi_annual_plans'))
 
+@app.route('/fetch_historical_semi_annual_plans', methods=['GET'])
+def fetch_historical_semi_annual_plans():
+    """Fetch historical semi-annual plans for the logged-in user based on filters."""
+    if 'user_id' not in session:
+        return jsonify({"success": False, "error": "Unauthorized access."}), 401
+
+    user_id = session['user_id']
+    status = request.args.get('status', '').strip()
+    keyword = request.args.get('keyword', '').strip()
+    start_date = request.args.get('start_date', '').strip()
+    end_date = request.args.get('end_date', '').strip()
+
+    try:
+        with get_db_connection() as conn:
+            cursor = conn.cursor()
+            query = """
+                SELECT id, title, description, target_value, start_date, end_date, priority, status, notes, created_at 
+                FROM semi_annual_plans 
+                WHERE user_id = ?
+            """
+            params = [user_id]
+
+            # Apply status filter
+            if status:
+                query += " AND status = ?"
+                params.append(status)
+
+            # Apply keyword filter
+            if keyword:
+                query += " AND (title LIKE ? OR description LIKE ?)"
+                keyword_pattern = f"%{keyword}%"
+                params.extend([keyword_pattern, keyword_pattern])
+
+            # Apply date range filter
+            if start_date and end_date:
+                try:
+                    start_date_obj = datetime.strptime(start_date, '%Y-%m-%d')
+                    end_date_obj = datetime.strptime(end_date, '%Y-%m-%d')
+
+                    if start_date_obj > end_date_obj:
+                        return jsonify({"success": False, "error": "Start date must be before or equal to end date"}), 400
+
+                    query += " AND created_at BETWEEN ? AND ?"
+                    params.extend([f"{start_date} 00:00:00", f"{end_date} 23:59:59"])
+                except ValueError:
+                    return jsonify({"success": False, "error": "Invalid date format. Use YYYY-MM-DD"}), 400
+
+            # Execute the query
+            cursor.execute(query, params)
+            semi_annual_plans = cursor.fetchall()
+
+        return jsonify({
+            "success": True,
+            "semi_annual_plans": [
+                {
+                    "id": plan[0],
+                    "title": plan[1],
+                    "description": plan[2],
+                    "target_value": plan[3],
+                    "start_date": plan[4],
+                    "end_date": plan[5],
+                    "priority": plan[6],
+                    "status": plan[7],
+                    "notes": plan[8],
+                    "created_at": plan[9],
+                }
+                for plan in semi_annual_plans
+            ]
+        })
+    except sqlite3.Error as e:
+        print(f"Database error: {e}")
+        return jsonify({"success": False, "error": "Unable to fetch semi-annual plans"}), 500
+    
+@app.route('/delete_semi_annual_plan/<int:plan_id>', methods=['POST'])
+def delete_semi_annual_plan(plan_id):
+    """Delete a semi-annual plan."""
+    if 'user_id' not in session:
+        return redirect(url_for('login'))
+
+    user_id = session['user_id']
+    
+    try:
+        with get_db_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute("DELETE FROM semi_annual_plans WHERE id = ? AND user_id = ?", (plan_id, user_id))
+            conn.commit()
+        return redirect(url_for('semi_annual_plans'))
+    except sqlite3.Error as e:
+        print(f"Database error: {e}")
+        return "Error: Unable to delete semi-annual plan.", 500
+@app.route('/upload_semi_annual_plans', methods=['POST'])
+def upload_semi_annual_plans():
+    """Upload and process semi-annual plans for the logged-in user."""
+    if 'user_id' not in session:
+        return "Error: Unauthorized access.", 401
+
+    user_id = session['user_id']
+    file = request.files.get('file')
+    if not file:
+        return "Error: No file uploaded.", 400
+    
+    try:
+        # Determine file type and read into DataFrame
+        if file.filename.endswith('.csv'):
+            df = pd.read_csv(file)
+        elif file.filename.endswith(('.xls', '.xlsx')):
+            df = pd.read_excel(file)
+        else:
+            return "Error: Invalid file format. Please upload an Excel or CSV file.", 400
+        
+        # Normalize column names
+        df.columns = [col.strip().lower() for col in df.columns]
+        
+        # Validate required columns
+        required_columns = {'title', 'description', 'target_value', 'start_date', 'end_date', 'priority', 'notes'}
+        if not required_columns.issubset(df.columns):
+            return f"Error: Missing required columns. Required columns are {', '.join(required_columns)}.", 400
+        
+        # Clean and validate data
+        invalid_rows = []
+        for index, row in df.iterrows():
+            # Validate required fields
+            if pd.isna(row['title']) or pd.isna(row['description']) or pd.isna(row['target_value']) or pd.isna(row['start_date']) or pd.isna(row['end_date']):
+                invalid_rows.append(index + 1)
+                continue
+
+            # Validate date
+            try:
+                row['start_date'] = pd.to_datetime(row['start_date']).date() if not pd.isna(row['start_date']) else None
+                row['end_date'] = pd.to_datetime(row['end_date']).date() if not pd.isna(row['end_date']) else None
+            except ValueError:
+                invalid_rows.append(index + 1)
+                continue
+            
+            # Ensure priority is valid
+            if str(row['priority']).capitalize() not in ['High', 'Medium', 'Low']:
+                invalid_rows.append(index + 1)
+                continue
+            
+            # Prepare row for insertion
+            with get_db_connection() as conn:
+                cursor = conn.cursor()
+                cursor.execute('''
+                    INSERT INTO semi_annual_plans 
+                    (user_id, title, description, target_value, start_date, end_date, priority, notes)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                ''', (user_id, row['title'], row['description'], row['target_value'], row['start_date'], row['end_date'], row['priority'].capitalize(), row['notes']))
+                conn.commit()
+
+        # Return success and invalid row information
+        if invalid_rows:
+            return f"Upload completed with errors. Invalid rows: {invalid_rows}", 200
+        
+        return redirect(url_for('semi_annual_plans'))
+    except Exception as e:
+        print(f"Error processing file: {e}")
+        return f"Error: Unable to process the uploaded file. Details: {str(e)}", 500
 @app.route('/monthly-progress')
 def monthly_progress():
     """Render the monthly progress page."""

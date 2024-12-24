@@ -2,14 +2,17 @@
 
 {% block content %}
 <div class="container">
+    <!-- Add Semi-Annual Plan Button -->
     <section>
-        <h2>Semi-Annual Plans & Targets</h2>
-        <button id="showFormButton" type="button" class="show-btn">Add New Plan</button>
+        <h2>Manage Semi-Annual Plans</h2>
+        <button id="showFormButton" type="button" class="show-btn">Add Semi-Annual Plan</button>
+        <button id="showUpload" type="button" class="upload-btn">Upload Semi-Annual Plans</button>
+		<button type="button" id="showfetchButton" class="btn-fetch">Fetch Historical Plans</button>
     </section>
 
-    <!-- Plan Creation Form -->
+    <!-- Semi-Annual Plan Creation Form (Initially Hidden) -->
     <section id="planFormSection" style="display: none;">
-        <h3>Create Semi-Annual Plan</h3>
+        <h2>Create Semi-Annual Plan</h2>
         <form id="addPlanForm" action="{{ url_for('semi_annual_plans') }}" method="post">
             <div class="form-group">
                 <label for="title">Title</label>
@@ -17,11 +20,11 @@
             </div>
             <div class="form-group">
                 <label for="description">Description</label>
-                <textarea name="description" id="description" required></textarea>
+                <input type="text" name="description" id="description" required>
             </div>
             <div class="form-group">
                 <label for="target_value">Target Value</label>
-                <input type="number" name="target_value" id="target_value" step="0.01" required>
+                <input type="number" name="target_value" id="target_value" required>
             </div>
             <div class="form-group">
                 <label for="start_date">Start Date</label>
@@ -43,60 +46,99 @@
                 <label for="notes">Notes</label>
                 <textarea name="notes" id="notes"></textarea>
             </div>
-            <button type="submit">Create Plan</button>
+            <button type="submit" onclick="return confirm('Are you sure you want to add this plan?')">Add Semi-Annual Plan</button>
         </form>
     </section>
 
-    <!-- Display Existing Plans -->
+    <!-- Upload Semi-Annual Plans Form -->
     <section>
-        <h3>Current Plans</h3>
+        <form id="uploadForm" action="{{ url_for('upload_semi_annual_plans') }}" method="post" enctype="multipart/form-data" style="display: none;">
+            <h3>Upload Semi-Annual Plans</h3>
+            <div class="form-group">
+                <label for="file">Select File (CSV or Excel):</label>
+                <input type="file" name="file" id="file" accept=".csv, .xls, .xlsx" required>
+            </div>
+            <button type="submit">Upload</button>
+        </form>
+    </section>
+
+    <!-- Fetch Historical Semi-Annual Plans Form -->
+    <section>
+        <form id="fetchForm" class="fetch-form" style="display: none;">
+            <h3>Fetch Historical Semi-Annual Plans</h3>
+            <select name="status" id="status">
+                <option value="">All</option>
+                <option value="Open">Open</option>
+                <option value="In Progress">In Progress</option>
+                <option value="Completed">Completed</option>
+                <option value="Cancelled">Cancelled</option>
+            </select>
+            <input type="text" id="keyword" name="keyword" placeholder="Search keyword">
+            <div>
+                <label for="start_date">Start Date:</label>
+                <input type="date" id="start_date" name="start_date">
+            </div>
+            <div>
+                <label for="end_date">End Date:</label>
+                <input type="date" id="end_date" name="end_date">
+            </div>
+            <button type="button" id="fetchButton">Fetch Plans</button>
+        </form>
+        <div id="planResults"></div> <!-- Container to display fetched plan results -->
+    </section>
+
+    <!-- Display Current Semi-Annual Plans -->
+    <section>
+        <h3>Current Semi-Annual Plans</h3>
         {% if plans %}
-        <table class="action-list">
+        <table class="plan-list">
             <thead>
                 <tr>
+                    <th>ID</th>
                     <th>Title</th>
                     <th>Description</th>
-                    <th>Target</th>
-                    <th>Progress</th>
-                    <th>Timeline</th>
+                    <th>Target Value</th>
+                    <th>Start Date</th>
+                    <th>End Date</th>
                     <th>Priority</th>
                     <th>Status</th>
+                    <th>Notes</th>
                     <th>Actions</th>
                 </tr>
             </thead>
             <tbody>
                 {% for plan in plans %}
                 <tr>
+                    <td>{{ plan.id }}</td>
                     <td>{{ plan.title }}</td>
                     <td>{{ plan.description }}</td>
                     <td>{{ plan.target_value }}</td>
-                    <td>
-                        {{ plan.current_value }}/{{ plan.target_value }}
-                        ({{ plan.percentage_completion }}%)
-                    </td>
-                    <td>
-                        {{ plan.start_date }} to {{ plan.end_date }}
-                    </td>
+                    <td>{{ plan.start_date }}</td>
+                    <td>{{ plan.end_date }}</td>
                     <td>{{ plan.priority }}</td>
                     <td>{{ plan.status }}</td>
+                    <td>{{ plan.notes }}</td>
                     <td>
-                        <button type="button" onclick="toggleUpdateForm('{{ plan.id }}')" class="show-btn">Update</button>
-                        
-                        <!-- Update Form -->
-                        <form id="updateForm{{ plan.id }}" style="display: none;" 
-                              action="{{ url_for('update_semi_annual_plan', plan_id=plan.id) }}" method="post">
-                            <select name="status" required>
-                                <option value="Open" {% if plan.status == 'Open' %}selected{% endif %}>Open</option>
-                                <option value="In Progress" {% if plan.status == 'In Progress' %}selected{% endif %}>In Progress</option>
-                                <option value="Completed" {% if plan.status == 'Completed' %}selected{% endif %}>Completed</option>
-                            </select>
-                            <input type="number" name="current_value" placeholder="Current Value" 
-                                   value="{{ plan.current_value }}" step="0.01">
-                            <input type="number" name="percentage_completion" placeholder="Completion %" 
-                                   value="{{ plan.percentage_completion }}" min="0" max="100">
-                            <textarea name="notes" placeholder="Update notes...">{{ plan.notes }}</textarea>
-                            <button type="submit">Save Updates</button>
+                        <button type="button" id="show-edit-btn-{{ plan.id }}" class="show-btn" onclick="toggleEdit({{ plan.id }})">Edit Plan</button>
+                        <form action="{{ url_for('delete_semi_annual_plan', plan_id=plan.id) }}" method="post">
+                            <button type="submit" class="delete-btn" onclick="return confirm('Are you sure you want to delete this plan?')">Delete</button>
                         </form>
+                        <div id="edit-section-{{ plan.id }}" class="edit-section" style="display: none;">
+                            <form action="{{ url_for('semi_annual_plans', plan_id=plan.id) }}" method="post">
+                                <input type="text" name="title" value="{{ plan.title }}" placeholder="Title">
+                                <input type="text" name="description" value="{{ plan.description }}" placeholder="Description">
+                                <input type="number" name="target_value" value="{{ plan.target_value }}" placeholder="Target Value">
+                                <input type="date" name="start_date" value="{{ plan.start_date }}" placeholder="Start Date">
+                                <input type="date" name="end_date" value="{{ plan.end_date }}" placeholder="End Date">
+                                <select name="priority">
+                                    <option value="High" {% if plan.priority == 'High' %}selected{% endif %}>High</option>
+                                    <option value="Medium" {% if plan.priority == 'Medium' %}selected{% endif %}>Medium</option>
+                                    <option value="Low" {% if plan.priority == 'Low' %}selected{% endif %}>Low</option>
+                                </select>
+                                <textarea name="notes" placeholder="Notes">{{ plan.notes }}</textarea>
+                                <button type="submit">Update Plan</button>
+                            </form>
+                        </div>
                     </td>
                 </tr>
                 {% endfor %}
@@ -106,17 +148,102 @@
         <p>No semi-annual plans found.</p>
         {% endif %}
     </section>
+    
+    <script>
+        // Show the form when the "Add Semi-Annual Plan" button is clicked
+        document.getElementById("showFormButton").addEventListener("click", function () {
+            const formSection = document.getElementById("planFormSection");
+            formSection.style.display = "block"; // Show the form section
+            this.style.display = "none"; // Hide the "Add Semi-Annual Plan" button
+        });
+
+        // Toggle the visibility of the upload form
+        document.getElementById('showUpload').addEventListener('click', function () {
+            const uploadForm = document.getElementById('uploadForm');
+            uploadForm.style.display = uploadForm.style.display === 'none' ? 'block' : 'none';
+        });
+
+        // Toggle the visibility of the fetch form
+        document.getElementById('showFetchButton').addEventListener('click', function () {
+            const fetchForm = document.getElementById('fetchForm');
+            fetchForm.style.display = fetchForm.style.display === 'none' ? 'block' : 'none';
+        });
+
+        // Fetch Historical Semi-Annual Plans Dynamically
+        document.getElementById('fetchButton').addEventListener('click', function () {
+            const status = document.getElementById('status').value;
+            const keyword = document.getElementById('keyword').value;
+            const start_date = document.getElementById('start_date').value;
+            const end_date = document.getElementById('end_date').value;
+
+            const params = new URLSearchParams();
+            if (status) params.append('status', status);
+            if (keyword) params.append('keyword', keyword);
+            if (start_date) params.append('start_date', start_date);
+            if (end_date) params.append('end_date', end_date);
+
+            console.log(`Fetching semi-annual plans with params: ${params.toString()}`); // Debugging log
+
+            fetch(`/fetch_historical_semi_annual_plans?${params.toString()}`)
+                .then(response => response.json())
+                .then(data => {
+                    const planResults = document.getElementById('planResults');
+                    planResults.innerHTML = ''; // Clear previous results
+
+                    if (data.success) {
+                        if (data.semi_annual_plans.length === 0) {
+                            planResults.innerHTML = '<p>No plans found.</p>';
+                        } else {
+                            const table = document.createElement('table');
+                            table.className = 'fetch-list';
+                            const thead = `
+                                <thead>
+                                    <tr>
+                                        <th>ID</th>
+                                        <th>Title</th>
+                                        <th>Description</th>
+                                        <th>Target Value</th>
+                                        <th>Start Date</th>
+                                        <th>End Date</th>
+                                        <th>Priority</th>
+                                        <th>Status</th>
+                                        <th>Notes</th>
+                                    </tr>
+                                </thead>`;
+                            table.innerHTML = thead;
+
+                            const tbody = document.createElement('tbody');
+                            data.semi_annual_plans.forEach(plan => {
+                                const row = `
+                                    <tr>
+                                        <td>${plan.id}</td>
+                                        <td>${plan.title}</td>
+                                        <td>${plan.description}</td>
+                                        <td>${plan.target_value}</td>
+                                        <td>${plan.start_date}</td>
+                                        <td>${plan.end_date}</td>
+                                        <td>${plan.priority}</td>
+                                        <td>${plan.status}</td>
+                                        <td>${plan.notes}</td>
+                                    </tr>`;
+                                tbody.innerHTML += row;
+                            });
+                            table.appendChild(tbody);
+                            planResults.appendChild(table);
+                        }
+                    } else {
+                        planResults.innerHTML = `<p>Error: ${data.error}</p>`;
+                    }
+                })
+                .catch(error => {
+                    console.error('Error fetching plans:', error);
+                });
+        });
+
+        function toggleEdit(planId) {
+            const editSection = document.getElementById(`edit-section-${planId}`);
+            editSection.style.display = editSection.style.display === 'none' ? 'block' : 'none';
+        }
+    </script>
 </div>
-
-<script>
-document.getElementById("showFormButton").addEventListener("click", function() {
-    const formSection = document.getElementById("planFormSection");
-    formSection.style.display = formSection.style.display === "none" ? "block" : "none";
-});
-
-function toggleUpdateForm(planId) {
-    const form = document.getElementById(`updateForm${planId}`);
-    form.style.display = form.style.display === "none" ? "block" : "none";
-}
-</script>
 {% endblock %}
