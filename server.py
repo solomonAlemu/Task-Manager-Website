@@ -1107,6 +1107,7 @@ def delete_historical_tasks():
         return jsonify({"success": False, "error": "Unable to delete tasks."}), 500
 
 # 2. Route Updates (in server.py)
+# 2. Route Updates (in server.py)
 @app.route('/monthly-action', methods=['GET', 'POST'])
 def monthly_action():
     """Manage monthly action items for the logged-in user."""
@@ -1191,8 +1192,40 @@ def monthly_action():
             return redirect(url_for('monthly_action'))
             
         except (ValueError, sqlite3.Error) as e:
-            flash(f"Error: {e}", "error")
-            return redirect(url_for('monthly_action'))
+            print(f"Error: {e}")
+            return "Error: Invalid input or database error.", 500
+
+    # Fetch active semi-annual plans for the dropdown
+    try:
+        with get_db_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute('''
+                SELECT sp.id, sp.title, sp.target_value,
+                (SELECT COALESCE(SUM(target_portion), 0)
+                 FROM monthly_action_items
+                 WHERE semi_annual_plan_id = sp.id) as allocated_portions
+                FROM semi_annual_plans sp
+                WHERE sp.user_id = ? AND sp.status != 'Completed'
+            ''', (user_id,))
+            semi_annual_plans = cursor.fetchall()
+            
+            # Fetch existing monthly actions
+            cursor.execute('''
+                SELECT ma.*, sp.title as plan_title, sp.target_value
+                FROM monthly_action_items ma
+                LEFT JOIN semi_annual_plans sp ON ma.semi_annual_plan_id = sp.id
+                WHERE ma.user_id = ? AND ma.status NOT IN ('Completed', 'Cancelled')
+                ORDER BY ma.created_at DESC
+            ''', (user_id,))
+            monthly_actions = cursor.fetchall()
+            
+        return render_template('monthly_action.html', 
+                             monthly_actions=monthly_actions,
+                             semi_annual_plans=semi_annual_plans)
+                             
+    except sqlite3.Error as e:
+        print(f"Database error: {e}")
+        return "Error: Unable to fetch data.", 500
     
     # Fetch active semi-annual plans for the dropdown
     try:
@@ -1476,7 +1509,10 @@ def update_semi_annual_plan(plan_id):
     start_date = request.form.get('start_date')
     end_date = request.form.get('end_date')
     priority = request.form.get('priority')
+    status = request.form.get('status')
+    current_value = request.form.get('current_value')
     notes = request.form.get('notes')
+    percentage_completion = request.form.get('percentage_completion')
 
     try:
         with get_db_connection() as conn:
@@ -1513,9 +1549,9 @@ def update_semi_annual_plan(plan_id):
             cursor.execute("""
                 UPDATE semi_annual_plans
                 SET title = ?, description = ?, target_value = ?, start_date = ?, end_date = ?, 
-                    priority = ?, notes = ?
+                    priority = ?,status = ?, current_value = ?, notes = ?, percentage_completion = ?
                 WHERE id = ? AND user_id = ?
-            """, (title, description, target_value, start_date, end_date, priority, notes, plan_id, user_id))
+            """, (title, description, target_value, start_date, end_date, priority,status, current_value, notes, percentage_completion, plan_id, user_id))
 
             conn.commit()
             flash('Plan updated successfully!', 'success')

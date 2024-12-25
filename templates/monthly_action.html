@@ -146,12 +146,12 @@
             <tbody>
                 {% for action in monthly_actions %}
                 <tr>
-                    <td>{{ action[0] }}</td>
-                    <td>{{ action[1] }}</td>
-                    <td>{{ action[2] }}</td>
-                    <td>{{ action[4] or '' }}</td>
-                    <td>{{ action[3] }}</td>
-                    <td>{{ action[5] if action[5] else "0"}} %</td>
+                    <td>{{ action.id }}</td>
+                    <td>{{ action.description }}</td>
+                    <td>{{ action.priority }}</td>
+                    <td>{{ action.due_date or '' }}</td>
+                    <td>{{ action.status }}</td>
+                    <td>{{ action.percentage_completion if action.percentage_completion else "0"}} %</td>
                     <td>
 						<button type="button" id="show-status-btn-{{ action[0] }}" class="show-btn" onclick="toggleUpdates_2({{ action[0] }})">Edit Action</button>
 						<form action="{{ url_for('update_monthly_action', action_id=action[0]) }}" method="post">
@@ -185,7 +185,7 @@
 			<td>
 			    <button type="button" id="show-updates-btn-{{ action[0] }}" class="show-btn" onclick="toggleUpdates({{ action[0] }})">Show Task Updates</button>
 			    <div id="update-section-{{ action[0] }}" class="updates" style="display: none;">
-				{{ action[6] }}
+				{{ action.notes }}
 			    </div>
 			</td>
                 </tr>

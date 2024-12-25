@@ -137,8 +137,8 @@
                     <th>Title</th>
                     <th>Description</th>
                     <th>Target Value</th>
-                    <th>Start Date</th>
-                    <th>End Date</th>
+					<th>Progress</th>
+                    <th>Timeline</th>
                     <th>Priority</th>
                     <th>Status</th>
                     <th>Notes</th>
@@ -152,8 +152,13 @@
                     <td>{{ plan.title }}</td>
                     <td>{{ plan.description }}</td>
                     <td>{{ plan.target_value }}</td>
-                    <td>{{ plan.start_date }}</td>
-                    <td>{{ plan.end_date }}</td>
+					<td>
+					    {{ plan.current_value }}/{{ plan.target_value }}
+					    ({{ plan.percentage_completion }}%)
+					</td>					
+					<td>
+					    {{ plan.start_date }} to {{ plan.end_date }}
+					</td>
                     <td>{{ plan.priority }}</td>
                     <td>{{ plan.status }}</td>
                     <td>{{ plan.notes }}</td>
@@ -175,7 +180,16 @@
 		                                    <option value="Medium" {% if plan.priority == 'Medium' %}selected{% endif %}>Medium</option>
 		                                    <option value="Low" {% if plan.priority == 'Low' %}selected{% endif %}>Low</option>
 		                                </select>
-		                                <textarea name="notes" placeholder="Update Notes">{{ plan.notes }}</textarea>
+										<select name="status" required>
+										    <option value="Open" {% if plan.status == 'Open' %}selected{% endif %}>Open</option>
+										    <option value="In Progress" {% if plan.status == 'In Progress' %}selected{% endif %}>In Progress</option>
+										    <option value="Completed" {% if plan.status == 'Completed' %}selected{% endif %}>Completed</option>
+										</select>
+										<input type="number" name="current_value" placeholder="Current Value" 
+										       value="{{ plan.current_value }}" step="0.01">
+										<input type="number" name="percentage_completion" placeholder="Completion %" 
+										       value="{{ plan.percentage_completion }}" min="0" max="100">
+										<textarea name="notes" placeholder="Update notes...">{{ plan.notes }}</textarea>
 		                                <button type="submit">Update Plan</button>
 		                            </form>
 		                        </div>
