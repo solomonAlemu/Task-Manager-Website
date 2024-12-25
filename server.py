@@ -1111,6 +1111,7 @@ def delete_historical_tasks():
 def monthly_action():
     """Manage monthly action items for the logged-in user."""
     if 'user_id' not in session:
+        flash("Unauthorized access. Please log in.", "error")
         return redirect(url_for('login'))
     
     user_id = session['user_id']
@@ -1121,18 +1122,21 @@ def monthly_action():
         due_date = request.form.get('due_date')
         notes = request.form.get('notes', '')
         semi_annual_plan_id = request.form.get('semi_annual_plan_id')
-        target_portion = request.form.get('target_portion', 0)
+        target_portion = request.form.get('target_portion', None)
+        
         if not description:
-            return "Description is required.", 400
+            flash("Description is required.", "error")
+            return redirect(url_for('monthly_action'))
 
         try:
-            target_portion = float(target_portion)
-            
+            if target_portion:
+                target_portion = float(target_portion)
+
             with get_db_connection() as conn:
                 cursor = conn.cursor()
                 
-                # Validate target portion against remaining plan target
-                if semi_annual_plan_id:
+                if semi_annual_plan_id and target_portion is not None:
+                    # Validate target portion against remaining plan target
                     cursor.execute('''
                         SELECT target_value, current_value,
                         (SELECT COALESCE(SUM(target_portion), 0)
@@ -1149,27 +1153,52 @@ def monthly_action():
                         remaining = total_target - allocated
                         
                         if target_portion > remaining:
-                            return "Error: Target portion exceeds remaining plan target.", 400
+                            flash("Error: Target portion exceeds remaining plan target.", "error")
+                            return redirect(url_for('monthly_action'))
 
-                cursor.execute('''
-                    INSERT INTO monthly_action_items 
-                    (user_id, description, priority, due_date, notes, status, semi_annual_plan_id, target_portion)
-                    VALUES (?, ?, ?, ?, ?, 'Open', ?, ?)
-                ''', (user_id, description, priority, due_date, notes, semi_annual_plan_id, target_portion))
+                    cursor.execute('''
+                        INSERT INTO monthly_action_items 
+                        (user_id, description, priority, due_date, notes, status, semi_annual_plan_id, target_portion)
+                        VALUES (?, ?, ?, ?, ?, 'Open', ?, ?)
+                    ''', (user_id, description, priority, due_date, notes, semi_annual_plan_id, target_portion))
+                    
+                    # Update the corresponding requirement of the target portion if provided
+                    cursor.execute('''
+                        UPDATE semi_annual_plans
+                        SET current_value = (
+                            SELECT COALESCE(SUM(target_portion), 0)
+                            FROM monthly_action_items
+                            WHERE semi_annual_plan_id = ?
+                        ),
+                        percentage_completion = (
+                            SELECT ROUND(COALESCE(SUM(target_portion), 0) * 100.0 / target_value)
+                            FROM monthly_action_items
+                            WHERE semi_annual_plan_id = ?
+                        )
+                        WHERE id = ?
+                    ''', (semi_annual_plan_id, semi_annual_plan_id, semi_annual_plan_id))
+
+                else:
+                    # Insert monthly action item without linking to semi-annual plans
+                    cursor.execute('''
+                        INSERT INTO monthly_action_items 
+                        (user_id, description, priority, due_date, notes, status)
+                        VALUES (?, ?, ?, ?, ?, 'Open')
+                    ''', (user_id, description, priority, due_date, notes))
                 
                 conn.commit()
+                flash('Monthly action created successfully!', 'success')
             return redirect(url_for('monthly_action'))
             
         except (ValueError, sqlite3.Error) as e:
-            print(f"Error: {e}")
-            return "Error: Invalid input or database error.", 500
-
+            flash(f"Error: {e}", "error")
+            return redirect(url_for('monthly_action'))
+    
     # Fetch active semi-annual plans for the dropdown
     try:
         with get_db_connection() as conn:
             cursor = conn.cursor()
             
-            # Fetch semi-annual plans for the dropdown
             cursor.execute('''
                 SELECT sp.id, sp.title, sp.target_value,
                 (SELECT COALESCE(SUM(target_portion), 0)
@@ -1180,27 +1209,6 @@ def monthly_action():
             ''', (user_id,))
             semi_annual_plans = cursor.fetchall()
             
-            if request.method == 'POST':
-                description = request.form.get('description')
-                priority = request.form.get('priority', 'Medium')
-                due_date = request.form.get('due_date')
-                notes = request.form.get('notes', '')
-                semi_annual_plan_id = request.form.get('semi_annual_plan_id')
-                
-                if not description:
-                    flash('Description is required', 'error')
-                    return redirect(url_for('monthly_action'))
-                
-                cursor.execute('''
-                    INSERT INTO monthly_action_items 
-                    (user_id, description, priority, due_date, notes, status, semi_annual_plan_id)
-                    VALUES (?, ?, ?, ?, ?, 'Open', ?)
-                ''', (user_id, description, priority, due_date, notes, semi_annual_plan_id))
-                conn.commit()
-                flash('Monthly action created successfully!', 'success')
-                return redirect(url_for('monthly_action'))
-            
-            # Fetch existing monthly actions
             cursor.execute('''
                 SELECT ma.*, sp.title as plan_title, sp.target_value
                 FROM monthly_action_items ma
@@ -1213,15 +1221,15 @@ def monthly_action():
         return render_template('monthly_action.html', 
                              monthly_actions=monthly_actions,
                              semi_annual_plans=semi_annual_plans)
-                             
     except sqlite3.Error as e:
-        print(f"Database error: {e}")
-        return "Error: Unable to fetch data.", 500
- 
+        flash(f"Error: Unable to fetch data. Details: {str(e)}", "error")
+        return redirect(url_for('monthly_action'))
+
 @app.route('/update_monthly_action/<int:action_id>', methods=['POST'])
 def update_monthly_action(action_id):
     """Update a monthly action status and handle target portion updates."""
     if 'user_id' not in session:
+        flash("Unauthorized access. Please log in.", "error")
         return redirect(url_for('login'))    
     user_id = session['user_id']    
     
@@ -1276,7 +1284,8 @@ def update_monthly_action(action_id):
             # Fetch one result from the query
             action = cursor.fetchone()
             if not action:
-                return "Error: action not found or unauthorized.", 404
+                flash("Error: Action not found or unauthorized.", "error")
+                return redirect(url_for('monthly_action'))
 
             (current_description, current_priority, current_status, current_due_date, 
              current_notes, current_percentage, semi_annual_plan_id, current_target_portion,
@@ -1286,7 +1295,8 @@ def update_monthly_action(action_id):
             if target_portion is not None and semi_annual_plan_id:
                 available_target = plan_target_value - other_portions
                 if target_portion > available_target:
-                    return f"Error: Target portion ({target_portion}) exceeds available target ({available_target}).", 400
+                    flash(f"Error: Target portion ({target_portion}) exceeds available target ({available_target}).", "error")
+                    return redirect(url_for('monthly_action'))
 
             # Use current values if new ones aren't provided
             description = description or current_description
@@ -1353,15 +1363,17 @@ def update_monthly_action(action_id):
 
             conn.commit()
 
+        flash("Monthly action updated successfully.", "success")
         return redirect(url_for('monthly_action'))
     except sqlite3.Error as e:
-        print(f"Database error: {e}")
-        return "Error: Unable to update monthly action item.", 500
+        flash(f"Error: Unable to update monthly action item. Details: {str(e)}", "error")
+        return redirect(url_for('monthly_action'))
 
 @app.route('/delete_monthly_action/<int:action_id>', methods=['POST'])
 def delete_monthly_action(action_id):
-    """Delete a monthly action item."""
+    """Delete a monthly action item along with its related tasks."""
     if 'user_id' not in session:
+        flash("Unauthorized access. Please log in.", "error")
         return redirect(url_for('login'))
 
     user_id = session['user_id']
@@ -1369,15 +1381,19 @@ def delete_monthly_action(action_id):
     try:
         with sqlite3.connect(DATABASE) as conn:
             cursor = conn.cursor()
+            
             # First, remove any linked tasks
-            cursor.execute("DELETE FROM tasks WHERE monthly_action_id = ? AND user_id = ?", (action_id, user_id))
+            cursor.execute("DELETE FROM tasks WHERE monthly_action_id = ?", (action_id,))
+            
             # Then delete the monthly action item
             cursor.execute("DELETE FROM monthly_action_items WHERE id = ? AND user_id = ?", (action_id, user_id))
             conn.commit()
+            
+        flash("Monthly action and related tasks deleted successfully.", "success")
         return redirect(url_for('monthly_action'))
     except sqlite3.Error as e:
-        print(f"Database error: {e}")
-        return "Error: Unable to delete monthly action item.", 500
+        flash(f"Error: Unable to delete monthly action item. Details: {str(e)}", "error")
+        return redirect(url_for('monthly_action'))
 
 # Add new route handlers
 @app.route('/semi-annual-plans', methods=['GET', 'POST'])
@@ -1450,28 +1466,65 @@ def semi_annual_plans():
 @app.route('/update_semi_annual_plan/<int:plan_id>', methods=['POST'])
 def update_semi_annual_plan(plan_id):
     if 'user_id' not in session:
+        flash("Unauthorized access. Please log in.", "error")
         return redirect(url_for('login'))
-    
+
     user_id = session['user_id']
-    status = request.form.get('status')
-    current_value = request.form.get('current_value')
+    title = request.form.get('title')
+    description = request.form.get('description')
+    target_value = request.form.get('target_value')
+    start_date = request.form.get('start_date')
+    end_date = request.form.get('end_date')
+    priority = request.form.get('priority')
     notes = request.form.get('notes')
-    percentage_completion = request.form.get('percentage_completion')
-    
+
     try:
         with get_db_connection() as conn:
             cursor = conn.cursor()
-            cursor.execute('''
-                UPDATE semi_annual_plans
-                SET status = ?, current_value = ?, notes = ?, percentage_completion = ?
+
+            # Fetch the existing semi-annual plan details
+            cursor.execute("""
+                SELECT title, description, target_value, start_date, end_date, priority, notes
+                FROM semi_annual_plans
                 WHERE id = ? AND user_id = ?
-            ''', (status, current_value, notes, percentage_completion, plan_id, user_id))
+            """, (plan_id, user_id))
+
+            plan = cursor.fetchone()
+            if not plan:
+                flash("Error: Plan not found or unauthorized.", "error")
+                return redirect(url_for('semi_annual_plans'))
+
+            (current_title, current_description, current_target_value, 
+             current_start_date, current_end_date, current_priority, current_notes) = plan
+
+            # Use provided values or existing ones if new ones aren't provided
+            title = title if title else current_title
+            description = description if description else current_description
+            target_value = target_value if target_value else current_target_value
+            start_date = start_date if start_date else current_start_date
+            end_date = end_date if end_date else current_end_date
+            priority = priority if priority else current_priority
+            notes = notes if notes else current_notes
+
+            # Ensure values are properly converted to appropriate types
+            target_value = float(target_value) if target_value is not None else current_target_value
+
+            # Update the semi-annual plan
+            cursor.execute("""
+                UPDATE semi_annual_plans
+                SET title = ?, description = ?, target_value = ?, start_date = ?, end_date = ?, 
+                    priority = ?, notes = ?
+                WHERE id = ? AND user_id = ?
+            """, (title, description, target_value, start_date, end_date, priority, notes, plan_id, user_id))
+
             conn.commit()
             flash('Plan updated successfully!', 'success')
     except sqlite3.Error as e:
         flash(f'Error updating plan: {str(e)}', 'error')
-    
+
     return redirect(url_for('semi_annual_plans'))
+
+
 
 @app.route('/fetch_historical_semi_annual_plans', methods=['GET'])
 def fetch_historical_semi_annual_plans():
@@ -1548,8 +1601,9 @@ def fetch_historical_semi_annual_plans():
     
 @app.route('/delete_semi_annual_plan/<int:plan_id>', methods=['POST'])
 def delete_semi_annual_plan(plan_id):
-    """Delete a semi-annual plan."""
+    """Delete a semi-annual plan along with its related monthly action items."""
     if 'user_id' not in session:
+        flash("Unauthorized access. Please log in.", "error")
         return redirect(url_for('login'))
 
     user_id = session['user_id']
@@ -1557,12 +1611,21 @@ def delete_semi_annual_plan(plan_id):
     try:
         with get_db_connection() as conn:
             cursor = conn.cursor()
+            
+            # First, delete related monthly actions
+            cursor.execute("DELETE FROM monthly_action_items WHERE semi_annual_plan_id = ?", (plan_id,))
+            
+            # Then delete the semi-annual plan
             cursor.execute("DELETE FROM semi_annual_plans WHERE id = ? AND user_id = ?", (plan_id, user_id))
             conn.commit()
+            
+        flash("Semi-annual plan and related monthly actions deleted successfully.", "success")
         return redirect(url_for('semi_annual_plans'))
     except sqlite3.Error as e:
-        print(f"Database error: {e}")
-        return "Error: Unable to delete semi-annual plan.", 500
+        flash(f"Error: Unable to delete semi-annual plan. Details: {str(e)}", "error")
+        return redirect(url_for('semi_annual_plans'))
+
+    
 @app.route('/upload_semi_annual_plans', methods=['POST'])
 def upload_semi_annual_plans():
     """Upload and process semi-annual plans for the logged-in user."""

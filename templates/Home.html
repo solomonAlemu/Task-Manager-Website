@@ -2,308 +2,567 @@
 
 {% block content %}
 <div class="container">
-    <!-- Add Action Button -->
+
     <section>
         <h2>Manage Tasks</h2>
         <button id="showFormButton" type="button" class="show-btn">Add Actions</button>
         <button id="showUpload" type="button" class="upload-btn">Upload Actions</button>
-		<button id="exportButton" type="button" class="export-btn">Export Tasks</button>
+        <button id="exportButton" type="button" class="export-btn">Export Tasks</button>
         <button type="button" id="showfetchButton" class="btn-fetch">Fetch Historical Actions</button>
     </section>
 
-    <!-- Monthly Action Item Creation Form (Initially Hidden) -->
     <section>
- 
-        <form id="addTaskForm" action="{{ url_for('monthly_action') }}" method="post"  style="display: none;">
+        <form id="addTaskForm" action="/add" method="post" method="post" style="display: none;">
+            <h2>Create a Task</h2>
             <div class="form-group">
                 <label for="description">Description</label>
-                <input type="text" name="description" id="description" required>
+                <input type="text" id="description" name="description" required>
             </div>
             <div class="form-group">
                 <label for="priority">Priority</label>
-                <select name="priority" id="priority">
-                    <option value="High">High</option>
-                    <option value="Medium" selected>Medium</option>
-                    <option value="Low">Low</option>
+                <select id="priority" name="priority">
+                    <option value="High">High Priority</option>
+                    <option value="Medium" selected>Medium Priority< option>
+                    <option value="Low">Low Priority</option>
                 </select>
             </div>
             <div class="form-group">
-                <label for="due_date">Due Date</label>
-                <input type="date" name="due_date" id="due_date">
+                <label for="monthly_action_id">Monthly Action Item (Optional)</label>
+                <select id="monthly_action_id" name="monthly_action_id">
+                    <option value="">Select Monthly Action Item</option>
+                    {% for action in monthly_actions %}
+                    <option value="{{ action[0] }}">{{ action[1] }} ({{ action[2] }} Priority)</option>
+                    {% endfor %}
+                </select>
             </div>
             <div class="form-group">
-                <label for="notes">Notes</label>
-                <textarea name="notes" id="notes"></textarea>
+                <label for="recipients">Assigned Person</label>
+                <input type="text" id="emailSearch_0" class="email-search-input form-control" placeholder="Search recipient by keyword" oninput="searchEmailRecipients(0, this.value)">
+                <ul id="emailResults_0" class="email-results-list" />
+                <div id="selectedEmails_0" class="selected-emails-container" />
+                <!-- Hidden input for recipients -->
+                <input type="hidden" id="recipientsJson" name="recipients">
             </div>
-			<!-- Add this inside the form in the taskFormSection -->
-			<div class="form-group">
-			    <label for="semi_annual_plan">Semi-Annual Plan (Optional)</label>
-			    <select name="semi_annual_plan_id" id="semi_annual_plan" onchange="updateTargetInfo()">
-			        <option value="">None</option>
-			        {% for plan in semi_annual_plans %}
-			        <option value="{{ plan.id }}" 
-			                data-target="{{ plan.target_value }}"
-			                data-allocated="{{ plan.allocated_portions }}">
-			            {{ plan.title }} (Remaining: {{ plan.target_value - plan.allocated_portions }} units)
-			        </option>
-			        {% endfor %}
-			    </select>
-			</div>		
-			<div class="form-group" id="target_portion_group" style="display: none;">
-			    <label for="target_portion">Target Portion</label>
-			    <input type="number" name="target_portion" id="target_portion" step="0.01" min="0">
-			    <span id="target_info"></span>
-			</div>				
-            <button type="submit" onclick="return confirm('Are you sure you want to add this item?')">Add Monthly Action Item</button>
+            <div class="form-group">
+                <label for="due_date">Due Date</label>
+                <input type="date" id="due_date" name="due_date">
+            </div>
+            <button type="submit" id="addTaskButton" class="btn-addTask">Add Task</button>
         </form>
     </section>
-	<section>
- 		<form id="exportForm" class="export-form" action="{{ url_for('export_tasks') }}" method="GET"  margin-top: 20px;" style="display: none;">
-			<h3>Select the date range to export historical tasks </h3>>
-		        <div>
-					<label for="start_date">Start Date:</label>
-					<input type="date" id="start_date" name="start_date">
-					<label for="end_date">End Date:</label>
-					<input type="date" id="end_date" name="end_date">
-		        </div>
-		        <button type="submit" class="export-btn">Download CSV</button>
-	   </form>
-	</section>	
     <section>
-		<!-- Fetch Monthly Action Items Form -->
-		<form id="fetchForm" class="fetch-form" style="display: none;">
-		    <h3>Fetch Historical Monthly Action Items</h3>
-		    <select name="status" id="status">
-		        <option value="">All</option>
-		        <option value="Open">Open</option>
-		        <option value="In Progress">In Progress</option>
-		        <option value="Completed">Completed</option>
-		        <option value="Cancelled">Cancelled</option>
-		    </select>
-		    <input type="text" id="keyword" name="keyword" placeholder="Search keyword">
-		    <div>
-		        <label for="start_date">Start Date:</label>
-		        <input type="date" id="start_date" name="start_date">
-		    </div>
-		    <div>
-		        <label for="end_date">End Date:</label>
-		        <input type="date" id="end_date" name="end_date">
-		    </div>
-		    <button type="button" id="fetchButton">Fetch Action Items</button>
-		</form>
-		<div id="actionResults"></div> <!-- Container to display fetched action results -->
-    </section>
-    <section>
-       
-        <form id="uploadForm" action="{{ url_for('upload_monthly_actions') }}" method="post" enctype="multipart/form-data" style="display: none;">
-			<h3>Upload Monthly Actions</h3
-			    <h4>Required File Format:</h4>
-			    <div class="format-table">
-			        <table>
-			            <thead>
-			                <tr>
-			                    <th>description*</th>
-			                    <th>priority</th>
-			                    <th>due_date</th>
-			                    <th>notes</th>
-			                </tr>
-			            </thead>
-			            <tbody>
-			                <tr>
-			                    <td>Action description</td>
-			                    <td>high/medium/low</td>
-			                    <td>YYYY-MM-DD</td>
-			                    <td>Additional notes</td>
-			                </tr>
-			            </tbody>
-			        </table>
-			        <p class="format-note">Note: Only description field is mandatory (*)</p>
-			    </div>			>
-			<div class="form-group">
-                <label for="file">Select File (CSV or Excel):</label>
-                <input type="file" name="file" id="file" accept=".csv, .xls, .xlsx" required>
+        <!-- Task Search Section -->
+        <form id="fetchForm" class="add-task-form" style="display: none;">
+            <h3>Fetch Historical Tasks</h3>
+            <select name="status" id="fetch_status">
+                <option value="">All</option>
+                <option value="Open">Open</option>
+                <option value="In Progress">In Progress</option>
+                <option value="Completed">Completed</option>
+                <option value="Cancelled">Cancelled</option>
+            </select>
+            <input type="text" id="fetch_keyword" name="keyword" placeholder="Search by keyword or monthly action description">
+            <div>
+                <label for="fetch_start_date">Start Date:</label>
+                <input type="date" id="fetch_start_date" name="start_date">
             </div>
-            <button type="submit">Upload</button>
+            <div>
+                <label for="fetch_end_date">End Date:</label>
+                <input type="date" id="fetch_end_date" name="end_date">
+            </div>
+            <button type="button" id="fetchButton" class="btn btn-fetch">Fetch Tasks</button>
         </form>
+        <div id="taskResults" />
     </section>
 
     <section>
-		{% with messages = get_flashed_messages(with_categories=true) %}
-		    {% if messages %}
-		        <div class="alerts">
-		            {% for category, message in messages %}
-		                <div class="alert alert-{{ category }}">
-		                    {{ message }}
-		                </div>
-		            {% endfor %}
-		        </div>
-		    {% endif %}
-		{% endwith %}			
+        <form id="exportForm" action="{{ url_for('export_tasks') }}" method="GET" margin-top: 20px;" style=" display: none; ">
+            <div>
+                <label for="start_date">Start Date:</label>
+                <input type="date" id="start_date" name="start_date">
+                <label for="end_date">End Date:</label>
+                <input type="date" id="end_date" name="end_date">
+            </div>
+            <button type="submit" class="export-btn">Download CSV</button>
+        </form>
+    </section>
+    <section>
+        <form id="uploadForm" action=" {{ url_for( 'upload_tasks' ) }} " method=" post " enctype=" multipart/form-data" style=" display: none; ">
+            <h3>Upload Taks</h3 <h4>Required File Format:</h4>
+            <div class=" format-table ">
+                <table>
+                    <thead>
+                        <tr>
+                            <th>description*</th>
+                            <th>priority</th>
+                            <th>due_date</th>
+                            <th>notes</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr>
+                            <td>Action description</td>
+                            <td>high/medium/low</td>
+                            <td>YYYY-MM-DD</td>
+                            <td>Additional notes</td>
+                        </tr>
+                    </tbody>
+                </table>
+                <p class=" format-note ">Note: Only description field is mandatory (*)</p>
+            </div>
+            <div class=" form-group ">
+                <label for=" file ">Select File (CSV or Excel):</label>
+                <input type=" file " name=" file " id=" file " accept=" .csv, .xls, .xlsx " required>
+            </div>
+            <button type=" submit ">Upload</button>
+        </form>
+    </section>
+    <!-- Daily Task List -->
+    <section class="task-list">
+        {% with messages = get_flashed_messages(with_categories=true) %}
+        {% if messages %}
+        <div class="alerts">
+            {% for category, message in messages %}
+            <div class="alert alert-{{ category }}">
+                {{ message }}
+            </div>
+            {% endfor %}
+        </div>
+        {% endif %}
+        {% endwith %}
+		
+        {% if tasks %}
         <h3>Current Task List</h3>
-        {% if monthly_actions %}
-        <table class="action-list">
-            <thead>
-                <tr>
-                    <th>ID</th>
-                    <th>Description</th>
-                    <th>Priority</th>
-                    <th>Due Date</th>
-                    <th>Status</th>
-                    <th>Completion (%)</th>
-                    <th>Actions</th>
-                    <th>Updates</th>
-                </tr>
-            </thead>
-            <tbody>
-                {% for action in monthly_actions %}
-                <tr>
-                    <td>{{ action[0] }}</td>
-                    <td>{{ action[1] }}</td>
-                    <td>{{ action[2] }}</td>
-                    <td>{{ action[4] or '' }}</td>
-                    <td>{{ action[3] }}</td>
-                    <td>{{ action[5] if action[5] else "0"}} %</td>
-                    <td>
-						<button type="button" id="show-status-btn-{{ action[0] }}" class="show-btn" onclick="toggleUpdates_2({{ action[0] }})">Edit Action</button>
-						<form action="{{ url_for('update_monthly_action', action_id=action[0]) }}" method="post">	
-						    <div id="grid-container-{{ action[0] }}" class="grid-container"  style="display: none;">
-		                            <select name="status" placeholder="Revised Status" >
-										<option value="" selected>Select Status</option>
-										<option value="Open">Open</option>
-										<option value="In Progress">In Progress</option>
-										<option value="Completed">Completed</option>
-										<option value="Cancelled">Cancelled</option>
-		                            </select>
-									<input type="text" name="revised_description" placeholder="Revised Description">
-									<select name="priority" id="priority">
-									  <option value="" selected>Select priority</option>
-									  <option value="High">High</option>
-									  <option value="Medium">Medium</option>
-									  <option value="Low">Low</option>
-									</select>
-									<input type="date" name="due_date" id="due_date" placeholder="Due Date">														
-									<input type="number" id="progress" name="percentage_completion" min="0" max="100" step="1"  placeholder="Percentage (%)" />
-									<textarea name="notes" class="notes-text" placeholder="Add notes..."></textarea>
-									<button type="submit" class="status-btn">Update</button>	                      
-							</div>
+		<table class="table table-striped">
+		    <thead>
+		        <tr>
+		            <th>ID</th>
+		            <th>Assigned Person</th>
+		            <th>Description</th>
+		            <th>Priority</th>
+		            <th>Status</th>
+		            <th>Monthly Action</th>
+		            <th>Due Date</th>
+		            <th>Status (%)</th>   
+		            <th>Actions</th>
+		            <th>Updates</th>
+					<th>Assigned By</th>
+					<th>Approved By</th>
+					<th>Approval Status</th>
+					<th>Approval Actions</th>					
+		            <th>Email Notification</th>
+		        </tr>
+		    </thead>
+		    <tbody>
+		        {% for task in tasks|sort(attribute='0', reverse=true) %}
+		        <tr>
+		            <td>{{ task[0] }}</td>
+		            <td>{{ task[1] or "Not Assigned" }}</td>
+		            <td>{{ task[2] }}</td>
+		            <td>{{ task[3] }}</td>
+		            <td>{{ task[4] }}</td>
+		            <td>{{ task.monthly_action_description if task.monthly_action_description else 'No linked action' }}</td>
+		            <td>{{ task[8] }}</td>
+		            <td>{{ task[5] if task[5] else "0"}} %</td>
+		            <td>
+		                <!-- Update Task Progress -->
+						<button type="button" id="show-status-btn-{{ task[0] }}" class="show-btn" onclick="toggleUpdates_2({{ task[0] }})">Edit Task</button>
+						<form id="updateTaskForm" action="{{ url_for('update_task', task_id=task[0]) }}" method="POST" class="form-container">
+						    <div id="id_grid-container-{{ task[0] }}" class="grid-container" style="display: none;">
+						        <div class="grid-item">
+									<input type="number" id="progress" name="percentage_completion" placeholder="Progress (%)" min="0" max="100" step="1" />
+						            <select name="status" id="status" >
+						                <option value="" selected>Select Status</option>
+						                <option value="Open">Open</option>
+						                <option value="In Progress">In Progress</option>
+						                <option value="Completed">Completed</option>
+						                <option value="Cancelled">Cancelled</option>
+						            </select>
+						        </div>
+								<div class="grid-item">
+								    <label for="recipients">Assigned Person</label>
+								    <input type="text" id="emailSearch_grid" class="email-search-input form-control"
+								           placeholder="Search recipient by keyword"
+								           oninput="searchEmailRecipients('grid', this.value)">
+								    <ul id="emailResults_grid" class="email-results-list"></ul>
+								    <div id="selectedEmails_grid" class="selected-emails-container"></div>
+								    <!-- Hidden input for recipients -->
+								    <input type="hidden" id="recipientsJson_grid" name="recipients">
+
+								    <select name="priority">
+								        <option value="" selected>Select Priority</option>
+								        <option value="High">High Priority</option>
+								        <option value="Medium">Medium Priority</option>
+								        <option value="Low">Low Priority</option>
+								    </select>                                                                
+								    <input type="text" name="revised_description" placeholder="Revised Description" >
+								    <textarea name="notes" class="notes-text" placeholder="Add notes..."></textarea>
+								    <div class="form-group">
+								        <input type="date" name="due_date" placeholder="Revised Due Date">
+								    </div>
+								    <div class="form-group">
+								        <select name="monthly_action_id" placeholder="Revised Monthly Action Item">
+								            <option value="">Select Monthly Action Item</option>
+								            {% for action in monthly_actions %}
+								            <option value="{{ action[0] }}">{{ action[1] }} ({{ action[2] }} Priority)</option>
+								            {% endfor %}
+								        </select>
+								    </div>
+								</div>
+								<button type="submit" class="status-btn" onclick="return confirm('Are you sure you want to update this item?')">Update</button>
+						    </div>
 						</form>
-                        <form action="{{ url_for('delete_monthly_action', action_id=action[0]) }}" method="post">
-                            <button type="submit" class="delete-btn" onclick="return confirm('Are you sure you want to delete this item?')">Delete</button>
-                        </form>
-                    </td>
-			<td>
-			    <button type="button" id="show-updates-btn-{{ action[0] }}" class="show-btn" onclick="toggleUpdates({{ action[0] }})">Show Task Updates</button>
-			    <div id="update-section-{{ action[0] }}" class="updates" style="display: none;">
-				{{ action[6] }}
-			    </div>
-			</td>
-                </tr>
-                {% endfor %}
-            </tbody>
-        </table>
+		                <!-- Delete Task -->
+						<form action="/delete/{{ task[0] }}" method="POST" class="delete-form">
+						</form>	
+		            </td>
+					<td>
+					    <button type="button" id="show-updates-btn-{{ task[0] }}" class="show-btn" onclick="toggleUpdates({{ task[0] }})">Show Task Updates</button>
+					    <div id="update-section-{{ task[0] }}" class="updates" style="display: none;">
+					        {{ task[7] }}
+					    </div>
+					</td>
+					<!-- Add this to the task list table row within the for loop -->
+					<td>{{ task.assigned_by_name }}</td>
+					<td>{{ task.approved_by_name }}</td>
+					<td>{{ task.approval_status }}</td>
+					<td>
+						<button type="button" id="show-status-btn-{{ task[0] }}" class="show-btn" onclick="toggleUpdates_4({{ task[0] }})">Edit </button> 				
+						 <div id="id_grid-container_3-{{ task.id }}" class="grid-container" style="display: none;">
+						    {% if task.requires_approval and task.assigned_person == session['username'] %}
+						    <form action="{{ url_for('request_approval', task_id=task.id) }}" method="POST">
+						        <button type="submit" class="btn btn-primary">Request Approval</button>
+						    </form>
+						    {% endif %}
+
+						    {% if task.assigned_by_name == session['username'] or task.approved_by == session['user_id'] %}
+						    <form action="{{ url_for('request_status_update', task_id=task.id) }}" method="POST">
+						        <button type="submit" class="btn btn-primary">Request Status Update</button>
+						    </form>
+							<form action="{{ url_for('request_justification', task_id=task.id) }}" method="POST">
+							    <button type="submit" class="btn btn-primary">Request Justification</button>
+							</form>							
+						    <form action="{{ url_for('approve_task', task_id=task.id) }}" method="POST">
+						        <button type="submit" name="status" value="approved" class="btn btn-success">Approve</button>
+						        <button type="submit" name="status" value="rejected" class="btn btn-danger">Reject</button>
+						    </form>
+						    {% endif %}
+
+						    {% if  task.approved_by == session['user_id'] %}
+						    <form action="{{ url_for('delete_task', task_id=task.id) }}" method="POST">
+						        <button type="submit" class="delete-btn" onclick="return confirm('Are you sure you want to delete this item?')">Delete</button>
+						    </form>
+						    {% endif %}
+
+						    {% if task.assigned_by_name != session['username'] and task.approved_by != session['user_id'] %}
+						    <button class="btn btn-secondary" disabled>Delete Disabled</button>
+						    {% endif %}
+						</div>
+					</td>
+					<!-- Email Notification Column -->
+					<td>
+					    <button type="button" id="show-Email-btn-{{ task[0] }}" class="show-btn" onclick="toggleUpdates_3({{ task[0] }})">Send Email</button>
+					    <div id="id_grid-container_2-{{ task[0] }}" class="grid-container_2" style="display: none;">
+					        <!-- Adding a form element to properly structure the data -->
+					        <form id="emailForm_{{ task[0] }}" class="email-form">
+					            <!-- Hidden input for task_id -->
+					            <input type="hidden" name="task_id" value="{{ task[0] }}">
+
+					            <!-- Email search section -->
+					            <input type="text" 
+					                   id="emailSearch_{{ task[0] }}" 
+					                   class="email-search-input form-control" 
+					                   placeholder="Search recipient by keyword" 
+					                   oninput="searchEmailRecipients({{ task[0] }}, this.value)">
+					            <ul id="emailResults_{{ task[0] }}" class="email-results-list"></ul>
+					            <div id="selectedEmails_{{ task[0] }}" class="selected-emails-container"></div>
+
+					            <!-- Email intent selection -->
+					            <select id="emailIntent_{{ task[0] }}" 
+					                    name="intent" 
+					                    class="email-intent-list form-control" 
+					                    required>
+					                <option value="" selected>Select Default Notification</option>
+					                <option value="Assignment">Assignment</option>
+					                <option value="Status request">Status request</option>
+					                <option value="Reminder">Reminder</option>
+					                <option value="Notification">Notification</option>
+					                <option value="Custom">Custom</option>
+					            </select>
+
+					            <!-- Subject and body inputs -->
+					            <input type="text" 
+					                   id="emailSubject_{{ task[0] }}" 
+					                   name="subject" 
+					                   class="form-control"
+					                   placeholder="Custom Subject">
+
+					            <textarea id="emailBody_{{ task[0] }}" 
+					                      name="body" 
+					                      class="notes-text" 
+					                      placeholder="Add custom email body..."></textarea>
+
+					            <!-- Submit button -->
+					            <button type="button" 
+					                    onclick="sendTaskEmail({{ task[0] }})" 
+					                    class="btn-sendTaskEmail">Send</button>
+					        </form>
+					    </div>
+					</td>
+		        </tr>
+		        {% endfor %}
+		    </tbody>
+		</table>
         {% else %}
-        <p>No task found.</p>
+        <p>No tasks to display</p>
         {% endif %}
     </section>
-    
+	</div>	
     <script>
-		document.addEventListener('DOMContentLoaded', () => {
-		    const today = new Date();
-		    today.setHours(0, 0, 0, 0); // Normalize today's date to midnight
+        // Fetch Tasks Dynamically
+        document.getElementById('fetchButton').addEventListener('click', function() {
+            const status = document.getElementById('fetch_status').value;
+            const keyword = document.getElementById('fetch_keyword').value;
+            const start_date = document.getElementById('fetch_start_date').value; // Correct ID
+            const end_date = document.getElementById('fetch_end_date').value; // Correct ID
 
-		    const rows = document.querySelectorAll('table.action-list tbody tr');
+            const params = new URLSearchParams();
+            if (status) params.append('status', status);
+            if (keyword) params.append('keyword', keyword);
+            if (start_date) params.append('start_date', start_date);
+            if (end_date) params.append('end_date', end_date);
 
-		    rows.forEach(row => {
-		        const dueDateCell = row.querySelector('td:nth-child(4)'); // 4th column for Due Date
-		        if (dueDateCell && dueDateCell.textContent.trim()) {
-		            const dueDateString = dueDateCell.textContent.trim();
+            console.log(`Fetching tasks with params: ${params.toString()}`); // Debugging log
 
-		            // Parse the due date as "YYYY-MM-DD"
-		            const [year, month, day] = dueDateString.split('-').map(Number);
-		            const dueDate = new Date(year, month - 1, day); // Month is 0-based in JavaScript
+            // Fetch data from the server
+            fetch(`/fetch?${params.toString()}`)
+                .then(response => {
+                    if (!response.ok) {
+                        throw new Error(`HTTP error! Status: ${response.status}`);
+                    }
+                    return response.json();
+                })
+                .then(data => {
+                    const taskResults = document.getElementById('taskResults');
+                    taskResults.innerHTML = ''; // Clear previous results
 
-		            if (!isNaN(dueDate.getTime())) { // Ensure the date is valid
-		                dueDate.setHours(0, 0, 0, 0); // Normalize due date to midnight
+                    if (data.success) {
+                        if (data.tasks.length === 0) {
+                            taskResults.innerHTML = '<p>No tasks found.</p>';
+                        } else {
+                            // Create table for displaying tasks
+                            const table = document.createElement('table');
+                            table.className = 'history-list';
+                            table.innerHTML = `
+<thead>
+<tr>
+<th>ID</th>
+<th>Assigned Person</th>
+<th>Description</th>
+<th>Status</th>
+<th>Notes</th>
+<th>Created At</th>
+<th>Monthly Action</th>
+</tr>
+</thead>
+`;
 
-		                // Apply classes based on the due date comparison
-		                if (dueDate < today) {
-		                    row.classList.add('past-due'); // Add class for overdue items
-		                } else if (dueDate.getTime() === today.getTime()) {
-		                    row.classList.add('due-today'); // Add class for items due today
-		                } else {
-		                    row.classList.add('future-due'); // Add class for future items
-		                }
-		            }
-		        }
-		    });
-		});
-		
-		
-		// Fetch Monthly Action Items Dynamically
-		document.getElementById('fetchButton').addEventListener('click', function () {
-		    const status = document.getElementById('status').value;
-		    const keyword = document.getElementById('keyword').value;
-		    const start_date = document.getElementById('start_date').value;
-		    const end_date = document.getElementById('end_date').value;
+                            const tbody = document.createElement('tbody');
+                            data.tasks.forEach(task => {
+                                const row = `
+<tr>
+<td>${task.id}</td>
+<td>${task.assigned_person}</td>
+<td>${task.description}</td>
+<td>${task.status}</td>
+<td>${task.notes || ''}</td>
+<td>${task.created_at}</td>
+<td>${task.monthly_action_description}</td>
+</tr>
+`;
+                                tbody.innerHTML += row;
+                            });
+                            table.appendChild(tbody);
+                            taskResults.appendChild(table);
+                        }
+                    } else {
+                        taskResults.innerHTML = `<p>Error: ${data.error}</p>`;
+                    }
+                })
+                .catch(error => {
+                    console.error('Error fetching tasks:', error);
+                    const taskResults = document.getElementById('taskResults');
+                    taskResults.innerHTML = '<p>An error occurred while fetching tasks. Please try again later.</p>';
+                });
+        });
 
-		    const params = new URLSearchParams();
-		    if (status) params.append('status', status);
-		    if (keyword) params.append('keyword', keyword);
-		    if (start_date) params.append('start_date', start_date);
-		    if (end_date) params.append('end_date', end_date);
+        document.querySelectorAll(".notes-text").forEach(textarea => {
+            textarea.addEventListener('change', function() {
+                const taskId = this.closest('tr').querySelector("td:first-child").textContent;
+                const noteContent = this.value;
+                fetch(`/update-note/${taskId}`, {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json'
+                        },
+                        body: JSON.stringify({
+                            notes: noteContent
+                        })
+                    })
+                    .then(response => response.json())
+                    .then(data => {
+                        if (data.success) {
+                            console.log('Notes updated');
+                        } else {
+                            alert('Failed to update notes');
+                        }
+                    });
+            });
+        });
 
-		    console.log(`Fetching monthly actions with params: ${params.toString()}`); // Debugging log
 
-		    fetch(`/fetch_monthly_actions?${params.toString()}`)
-		        .then(response => response.json())
-		        .then(data => {
-		            const actionResults = document.getElementById('actionResults');
-		            actionResults.innerHTML = ''; // Clear previous results
+        function sendTaskEmail(taskId) {
+            // Get form element
+            const form = document.getElementById(`emailForm_${taskId}`);
+            const formData = new FormData(form);
 
-		            if (data.success) {
-		                if (data.monthly_actions.length === 0) {
-		                    actionResults.innerHTML = '<p>No action items found.</p>';
-		                } else {
-		                    const table = document.createElement('table');
-		                    table.className = 'fetch-list';
-		                    const thead = `
-		                        <thead>
-		                            <tr>
-		                                <th>ID</th>
-		                                <th>Description</th>
-		                                <th>Status</th>
-		                                <th>Created At	 </th>
-		                                <th>Completion (%)</th>
-		                                <th>Notes</th>
-		                            </tr>
-		                        </thead>`;
-		                    table.innerHTML = thead;
+            // Get selected recipients
+            const selectedEmailsContainer = document.getElementById(`selectedEmails_${taskId}`);
+            if (!selectedEmailsContainer || selectedEmailsContainer.children.length === 0) {
+                alert('Please select at least one email recipient');
+                return;
+            }
 
-		                    const tbody = document.createElement('tbody');
-		                    data.monthly_actions.forEach(action => {
-		                        const row = `
-		                            <tr>
-		                                <td>${action.id}</td>
-		                                <td>${action.description}</td>
-		                                <td>${action.status}</td>
-		                                <td>${action.created_at || 'N/A'}</td>
-		                                <td>${action.percentage_completion}%</td>
-		                                <td>${action.notes || ''}</td>
-		                            </tr>`;
-		                        tbody.innerHTML += row;
-		                    });
-		                    table.appendChild(tbody);
-		                    actionResults.appendChild(table);
-		                }
-		            } else {
-		                actionResults.innerHTML = `<p>Error: ${data.error}</p>`;
-		            }
-		        })
-		        .catch(error => {
-		            console.error('Error fetching action items:', error);
-		        });
-		});
+            // Get recipients data
+            const recipients = Array.from(selectedEmailsContainer.children).map(emailDiv => ({
+                name: emailDiv.textContent.split(' (')[0].trim(),
+                email: emailDiv.dataset.email
+            }));
 
+            // Add recipients to form data
+            formData.set('recipients', JSON.stringify(recipients));
+
+            // Validate intent
+            const intent = formData.get('intent');
+            if (!intent) {
+                alert('Please select an email intent');
+                return;
+            }
+
+            // Send request
+            fetch('/send-task-email', {
+                    method: 'POST',
+                    body: formData
+                })
+                .then(response => response.json())
+                .then(data => {
+                    if (data.success) {
+                        alert('Emails sent successfully');
+                        // Clear form and close container
+                        form.reset();
+                        toggleUpdates_3(taskId);
+                    } else {
+                        alert(`Failed to send emails: ${data.message}`);
+                    }
+                })
+                .catch(error => {
+                    console.error('Error sending email:', error);
+                    alert('An error occurred while sending the email');
+                });
+        }
+
+
+        function toggleUpdates_3(taskId) {
+            const container = document.getElementById(`id_grid-container_2-${taskId}`);
+            if (container) {
+                container.style.display = container.style.display === 'none' ? 'block' : 'none';
+            } else {
+                console.error(`Email container not found for task ${taskId}`);
+            }
+        }
+
+        function searchEmailRecipients(taskId, keyword) {
+            if (!keyword || keyword.length < 2) {
+                document.getElementById(`emailResults_${taskId}`).innerHTML = '';
+                return;
+            }
+            fetch(` search-emails?keyword=${encodeURIComponent(keyword)}`).then(response => response.json())
+                .then(data => {
+                    const resultsContainer = document.getElementById(`emailResults_${taskId}`);
+                    resultsContainer.innerHTML = '';
+
+                    if (data.success && data.users.length > 0) {
+                        data.users.forEach(user => {
+                            const li = document.createElement('li');
+                            li.className = 'email-result-item';
+                            li.textContent = `${user.name} (${user.email})`;
+                            li.onclick = () => selectEmail(taskId, user);
+                            resultsContainer.appendChild(li);
+                        });
+                    } else {
+                        resultsContainer.innerHTML = '<li class="email-result-item">No matches found</li>';
+                    }
+                })
+                .catch(error => {
+                    console.error('Error searching emails:', error);
+                    document.getElementById(`emailResults_${taskId}`).innerHTML =
+                        '<li class="email-result-item">Error searching for emails</li>';
+                });
+        }
+
+        function searchEmailRecipients(taskId, keyword) {
+            if (!keyword || keyword.length < 2) {
+                document.getElementById(`emailResults_${taskId}`).innerHTML = '';
+                return;
+            }
+            fetch(` search-emails?keyword=${encodeURIComponent(keyword)}`).then(response => response.json())
+                .then(data => {
+                    const resultsContainer = document.getElementById(`emailResults_${taskId}`);
+                    resultsContainer.innerHTML = '';
+
+                    if (data.success && data.users.length > 0) {
+                        data.users.forEach(user => {
+                            const li = document.createElement('li');
+                            li.className = 'email-result-item';
+                            li.textContent = `${user.name} (${user.email})`;
+                            li.onclick = () => selectEmail(taskId, user);
+                            resultsContainer.appendChild(li);
+                        });
+                    } else {
+                        resultsContainer.innerHTML = '<li class="email-result-item">No matches found</li>';
+                    }
+                })
+                .catch(error => {
+                    console.error('Error searching emails:', error);
+                    document.getElementById(`emailResults_${taskId}`).innerHTML =
+                        '<li class="email-result-item">Error searching for emails</li>';
+                });
+        }
+
+        // Select email recipient
+        function selectEmail(taskId, user) {
+            const selectedEmailsContainer = document.getElementById(`selectedEmails_${taskId}`);
+
+            // Prevent duplicate entries
+            const existing = Array.from(selectedEmailsContainer.children).find(emailDiv =>
+                emailDiv.dataset.email === user.email
+            );
+            if (existing) return;
+
+            // Create a new div for the selected email
+            const emailDiv = document.createElement('div');
+            emailDiv.textContent = `${user.name} (${user.email})`;
+            emailDiv.className = 'selected-email';
+            emailDiv.dataset.email = user.email;
+
+            // Add a remove button
+            const removeBtn = document.createElement('button');
+            removeBtn.textContent = 'x';
+            removeBtn.onclick = () => emailDiv.remove();
+            emailDiv.appendChild(removeBtn);
+
+            selectedEmailsContainer.appendChild(emailDiv);
+        }
 
         function displayTextWithNewLines(text, elementId) {
             // Replace newline characters with <br> tags
@@ -311,92 +570,155 @@
             // Insert the formatted text into the specified element
             document.getElementById(elementId).innerHTML = formattedText;
         }
-		function updateTargetInfo() {
-		    const planSelect = document.getElementById('semi_annual_plan');
-		    const targetGroup = document.getElementById('target_portion_group');
-		    const targetInput = document.getElementById('target_portion');
-		    const targetInfo = document.getElementById('target_info');
-		    
-		    if (planSelect.value) {
-		        const option = planSelect.selectedOptions[0];
-		        const target = parseFloat(option.dataset.target);
-		        const allocated = parseFloat(option.dataset.allocated);
-		        const remaining = target - allocated;
-		        
-		        targetGroup.style.display = 'block';
-		        targetInput.max = remaining;
-		        targetInfo.textContent = `Available: ${remaining} units`;
-		    } else {
-		        targetGroup.style.display = 'none';
-		    }
+        // Example text for demonstration
+        const exampleText = "This is an example text\nthat includes new line characters\nand it should display accordingly.";
+        // Call this function for each task after the DOM is loaded
+	document.addEventListener('DOMContentLoaded', () => {
+		// Function to Toggle Visibility
+		function toggleVisibility(buttonId, formId) {
+		    document.getElementById(buttonId).addEventListener('click', function () {
+		        const form = document.getElementById(formId);
+		        form.style.display = form.style.display === 'none' ? 'block' : 'none';
+		    });
 		}
 
-		// Validate target portion on form submission
-		document.getElementById('addTaskForm').addEventListener('submit', function(e) {
-		    const planSelect = document.getElementById('semi_annual_plan');
-		    const targetInput = document.getElementById('target_portion');
-		    
-		    if (planSelect.value) {
-		        const option = planSelect.selectedOptions[0];
-		        const target = parseFloat(option.dataset.target);
-		        const allocated = parseFloat(option.dataset.allocated);
-		        const remaining = target - allocated;
-		        const portion = parseFloat(targetInput.value) || 0;
-		        
-		        if (portion > remaining) {
-		            e.preventDefault();
-		            alert(`Target portion cannot exceed remaining target (${remaining} units)`);
-		        }
-		    }
-		});
-        document.addEventListener('DOMContentLoaded', () => {
-            document.querySelectorAll('.updates').forEach((cell, index) => {
-                // Assign a unique ID to each cell if it doesn't have one
-                if (!cell.id) {
-                    cell.id = `updateCell_${index}`;
-                }
-                // Display text with new lines in each cell
-                displayTextWithNewLines(cell.textContent, cell.id);
-            });
+		// Attach Event Listeners
+		toggleVisibility('showFormButton', 'addTaskForm');
+		toggleVisibility('showUpload', 'uploadForm');
+		toggleVisibility('exportButton', 'exportForm');
+		toggleVisibility('showfetchButton', 'fetchForm');		
+		
+	    document.querySelectorAll('.updates').forEach((cell, index) => {
+	        // Assign a unique ID to each cell if it doesn't have one
+	        if (!cell.id) {
+	            cell.id = `updateCell_${index}`;
+	        }
+	        // Display text with new lines in each cell
+	        displayTextWithNewLines(cell.textContent, cell.id);
+	    });
+	    document.querySelectorAll('.email-recipient-list').forEach(select => {
+	        const taskId = select.id.split('_')[1];
+	        populateEmailDropdown(taskId);
+	    });
+	    const today = new Date();
+	    today.setHours(0, 0, 0, 0); // Normalize today's date to midnight
+
+	    const rows = document.querySelectorAll('table.table-striped tbody tr');
+
+	    rows.forEach(row => {
+	        const dueDateCell = row.querySelector('td:nth-child(7)'); // Adjust to 7th column for due_date
+	        if (dueDateCell && dueDateCell.textContent) {
+	            const dueDateString = dueDateCell.textContent.trim();
+	            const dueDate = new Date(dueDateString); // Parse the due date
+
+	            // Ensure the date is valid
+	            if (!isNaN(dueDate)) {
+	                dueDate.setHours(0, 0, 0, 0); // Normalize due date to midnight
+
+	                // Compare the due date with today's date
+	                if (dueDate < today) {
+	                    row.classList.add('past-due'); // Add a class for overdue tasks
+	                } else if (dueDate.getTime() === today.getTime()) {
+	                    row.classList.add('due-today'); // Add a class for tasks due today
+	                } else {
+	                    row.classList.add('future-due'); // Add a class for future tasks
+	                }
+	            }
+	        }
+	    });
+	});	
+        // Handle form submission
+        document.getElementById('addTaskButton').addEventListener('submit', function(event) {
+            // Get selected recipients from the container
+            const selectedEmailsContainer = document.getElementById('selectedEmails_0');
+            const recipients = Array.from(selectedEmailsContainer.children).map(emailDiv => ({
+                name: emailDiv.textContent.split(' (')[0].trim(),
+                email: emailDiv.dataset.email
+            }));
+
+            // Populate the hidden input with the JSON string
+            document.getElementById('recipientsJson').value = JSON.stringify(recipients);
+
+            // Debugging: Log the value for verification
+            console.log("Recipients JSON:", document.getElementById('recipientsJson').value);
         });
+
+        // Handle form submission for grid item
+        document.getElementById('updateTaskForm').addEventListener('submit', function(event) {
+            // Get selected recipients from the container
+            const selectedEmailsContainer = document.getElementById('selectedEmails_grid');
+            const recipients = Array.from(selectedEmailsContainer.children).map(emailDiv => ({
+                name: emailDiv.textContent.split(' (')[0].trim(),
+                email: emailDiv.dataset.email
+            }));
+
+            // Populate the hidden input with the JSON string
+            document.getElementById('recipientsJson_grid').value = JSON.stringify(recipients);
+
+            // Debugging: Log the value for verification
+            console.log("Recipients JSON (grid):", document.getElementById('recipientsJson_grid').value);
+        });
+
+
+        function assignTask() {
+            const form = document.getElementById('assignTaskForm');
+            const formData = new FormData(form);
+            fetch(' assign-task', {
+                    method: 'POST',
+                    body: formData
+                }).then(response => response.json())
+                .then(data => {
+                    if (data.success) {
+                        alert('Task assigned successfully');
+                    } else {
+                        alert('Error: ' + data.error);
+                    }
+                })
+                .catch(error => {
+                    console.error('Error:', error);
+                });
+        }
+
+        function approveTask() {
+            const form = document.getElementById('approveTaskForm');
+            const formData = new FormData(form);
+
+            fetch(`/approve-task/${formData.get('task_id')}`, {
+                    method: 'POST',
+                    body: formData
+                })
+                .then(response => response.json())
+                .then(data => {
+                    if (data.success) {
+                        alert('Task ' + formData.get('status') + ' successfully');
+                    } else {
+                        alert('Error: ' + data.error);
+                    }
+                })
+                .catch(error => {
+                    console.error('Error:', error);
+                });
+        }
  
-		// Toggle the visibility of the date range form when the export button is pressed
-		document.getElementById('showFormButton').addEventListener('click', function () {
-		    const dateRangeForm = document.getElementById('addTaskForm');
-		    dateRangeForm.style.display = dateRangeForm.style.display === 'none' ? 'block' : 'none';
-		});
-		
-        // Toggle the visibility of the date range form when the export button is pressed
-        document.getElementById('showUpload').addEventListener('click', function () {
-            const dateRangeForm = document.getElementById('uploadForm');
-            dateRangeForm.style.display = dateRangeForm.style.display === 'none' ? 'block' : 'none';
-        });
 
-		// Toggle the visibility of the date range form when the export button is pressed
-		document.getElementById('exportButton').addEventListener('click', function () {
-		    const dateRangeForm = document.getElementById('exportForm');
-		    dateRangeForm.style.display = dateRangeForm.style.display === 'none' ? 'block' : 'none';
-		});
-		
-        document.getElementById('showfetchButton').addEventListener('click', function () {
-            const fetchSection = document.getElementById('fetchForm');
-            fetchSection.style.display = fetchSection.style.display === 'none' ? 'block' : 'none';
-        });
-		document.getElementById('show-status-btn').addEventListener('click', function () {
-		    const fetchSection = document.querySelector('.grid-container');
-		    fetchSection.style.display = fetchSection.style.display === 'none' ? 'block' : 'none';
-		});
- 			
-		function toggleUpdates(taskId) {
-		    const updateSection = document.getElementById(`update-section-${taskId}`);
-		    updateSection.style.display = updateSection.style.display === 'none' ? 'block' : 'none';
-		}
+        function toggleUpdates(taskId) {
+            const updateSection = document.getElementById(`update-section-${taskId}`);
+            updateSection.style.display = updateSection.style.display === 'none' ? 'block' : 'none';
+        }
 
-		function toggleUpdates_2(taskId) {
-		    const updateSection = document.getElementById(`grid-container-${taskId}`);
-		    updateSection.style.display = updateSection.style.display === 'none' ? 'block' : 'none';
-		}		
-				
+        function toggleUpdates_2(taskId) {
+            const updateSection = document.getElementById(`id_grid-container-${taskId}`);
+            updateSection.style.display = updateSection.style.display === 'none' ? 'block' : 'none';
+        }
+
+        function toggleUpdates_3(taskId) {
+            const updateSection = document.getElementById(`id_grid-container_2-${taskId}`);
+            updateSection.style.display = updateSection.style.display === 'none' ? 'block' : 'none';
+        }
+
+        function toggleUpdates_4(taskId) {
+            const updateSection = document.getElementById(`id_grid-container_3-${taskId}`);
+            updateSection.style.display = updateSection.style.display === 'none' ? 'block' : 'none';
+        }
     </script>
-</div>
 {% endblock %}

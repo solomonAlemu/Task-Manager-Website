@@ -7,13 +7,13 @@
         <h2>Manage Semi-Annual Plans</h2>
         <button id="showFormButton" type="button" class="show-btn">Add Semi-Annual Plan</button>
         <button id="showUpload" type="button" class="upload-btn">Upload Semi-Annual Plans</button>
-		<button type="button" id="showfetchButton" class="btn-fetch">Fetch Historical Plans</button>
+		<button id="showfetchButton" type="button" class="btn-fetch">Fetch Historical Plans</button>
     </section>
 
     <!-- Semi-Annual Plan Creation Form (Initially Hidden) -->
-    <section id="planFormSection" style="display: none;">
-        <h2>Create Semi-Annual Plan</h2>
-        <form id="addPlanForm" action="{{ url_for('semi_annual_plans') }}" method="post">
+    <section> 
+        <form id="addPlanForm" action="{{ url_for('semi_annual_plans') }}" method="post" style="display: none;">
+	   <h2>Create Semi-Annual Plan</h2>
             <div class="form-group">
                 <label for="title">Title</label>
                 <input type="text" name="title" id="title" required>
@@ -51,9 +51,37 @@
     </section>
 
     <!-- Upload Semi-Annual Plans Form -->
-    <section>
+    <section>	
         <form id="uploadForm" action="{{ url_for('upload_semi_annual_plans') }}" method="post" enctype="multipart/form-data" style="display: none;">
-            <h3>Upload Semi-Annual Plans</h3>
+			<h3>Upload Semi Anual  Plans</h3
+			    <h4>Required File Format:</h4>
+			    <div class="format-table">
+			        <table>
+			            <thead>
+			                <tr>
+								<th>Title*</th>
+								<th>Description*</th>														
+			                    <th>Target_value*</th>
+			                    <th>Start_date</th>
+			                    <th>End_date</th>
+			                    <th>Priority</th>
+								<th>Notes</th>							
+			                </tr>
+			            </thead>
+			            <tbody>
+			                <tr>
+			                    <td>Semi Anual Plan Title</td>
+								<td>Semi Anual Plan Detail Description</td>	
+								<td>Plan start date</th>
+								<td>Plan end date</th>													
+			                    <td>high/medium/low</td>
+			                    <td>YYYY-MM-DD</td>
+			                    <td>Additional notes</td>
+			                </tr>
+			            </tbody>
+			        </table>
+			        <p class="format-note">Note: Only description field is mandatory (*)</p>
+			    </div>			
             <div class="form-group">
                 <label for="file">Select File (CSV or Excel):</label>
                 <input type="file" name="file" id="file" accept=".csv, .xls, .xlsx" required>
@@ -89,6 +117,17 @@
 
     <!-- Display Current Semi-Annual Plans -->
     <section>
+		{% with messages = get_flashed_messages(with_categories=true) %}
+		    {% if messages %}
+		        <div class="alerts">
+		            {% for category, message in messages %}
+		                <div class="alert alert-{{ category }}">
+		                    {{ message }}
+		                </div>
+		            {% endfor %}
+		        </div>
+		    {% endif %}
+		{% endwith %}			
         <h3>Current Semi-Annual Plans</h3>
         {% if plans %}
         <table class="plan-list">
@@ -120,25 +159,27 @@
                     <td>{{ plan.notes }}</td>
                     <td>
                         <button type="button" id="show-edit-btn-{{ plan.id }}" class="show-btn" onclick="toggleEdit({{ plan.id }})">Edit Plan</button>
-                        <form action="{{ url_for('delete_semi_annual_plan', plan_id=plan.id) }}" method="post">
-                            <button type="submit" class="delete-btn" onclick="return confirm('Are you sure you want to delete this plan?')">Delete</button>
-                        </form>
-                        <div id="edit-section-{{ plan.id }}" class="edit-section" style="display: none;">
-                            <form action="{{ url_for('semi_annual_plans', plan_id=plan.id) }}" method="post">
-                                <input type="text" name="title" value="{{ plan.title }}" placeholder="Title">
-                                <input type="text" name="description" value="{{ plan.description }}" placeholder="Description">
-                                <input type="number" name="target_value" value="{{ plan.target_value }}" placeholder="Target Value">
-                                <input type="date" name="start_date" value="{{ plan.start_date }}" placeholder="Start Date">
-                                <input type="date" name="end_date" value="{{ plan.end_date }}" placeholder="End Date">
-                                <select name="priority">
-                                    <option value="High" {% if plan.priority == 'High' %}selected{% endif %}>High</option>
-                                    <option value="Medium" {% if plan.priority == 'Medium' %}selected{% endif %}>Medium</option>
-                                    <option value="Low" {% if plan.priority == 'Low' %}selected{% endif %}>Low</option>
-                                </select>
-                                <textarea name="notes" placeholder="Notes">{{ plan.notes }}</textarea>
-                                <button type="submit">Update Plan</button>
-                            </form>
-                        </div>
+						<div id="edit-section-{{ plan.id }}" class="form-group" style="display: none;">
+		                        <form action="{{ url_for('delete_semi_annual_plan', plan_id=plan.id) }}" method="post">
+		                            <button type="submit" class="delete-btn" onclick="return confirm('Are you sure you want to delete this plan?')">Delete</button>
+		                        </form>
+		                        <div  class="edit-section" >
+		                            <form action="{{ url_for('update_semi_annual_plan', plan_id=plan.id) }}" method="post">
+		                                <input type="text" name="title"   placeholder="Title:  {{ plan.title }}">
+		                                <input type="text" name="description"   placeholder="Description: {{ plan.description }}">
+		                                <input type="number" name="target_value"  placeholder="Target Value {{ plan.target_value }}">
+		                                <input type="date" name="start_date"   placeholder="Start Date: {{ plan.start_date }}">
+		                                <input type="date" name="end_date"   placeholder="End Date: {{ plan.end_date }}">
+		                                <select name="priority">
+		                                    <option value="High" {% if plan.priority == 'High' %}selected{% endif %}>High</option>
+		                                    <option value="Medium" {% if plan.priority == 'Medium' %}selected{% endif %}>Medium</option>
+		                                    <option value="Low" {% if plan.priority == 'Low' %}selected{% endif %}>Low</option>
+		                                </select>
+		                                <textarea name="notes" placeholder="Update Notes">{{ plan.notes }}</textarea>
+		                                <button type="submit">Update Plan</button>
+		                            </form>
+		                        </div>
+					 </div>	
                     </td>
                 </tr>
                 {% endfor %}
@@ -150,13 +191,13 @@
     </section>
     
     <script>
-        // Show the form when the "Add Semi-Annual Plan" button is clicked
-        document.getElementById("showFormButton").addEventListener("click", function () {
-            const formSection = document.getElementById("planFormSection");
-            formSection.style.display = "block"; // Show the form section
-            this.style.display = "none"; // Hide the "Add Semi-Annual Plan" button
-        });
-
+ 
+		// Toggle the visibility of the upload form
+		document.getElementById('showFormButton').addEventListener('click', function () {
+		    const uploadForm = document.getElementById('addPlanForm');
+		    uploadForm.style.display = uploadForm.style.display === 'none' ? 'block' : 'none';
+		});
+				
         // Toggle the visibility of the upload form
         document.getElementById('showUpload').addEventListener('click', function () {
             const uploadForm = document.getElementById('uploadForm');
@@ -164,10 +205,11 @@
         });
 
         // Toggle the visibility of the fetch form
-        document.getElementById('showFetchButton').addEventListener('click', function () {
-            const fetchForm = document.getElementById('fetchForm');
-            fetchForm.style.display = fetchForm.style.display === 'none' ? 'block' : 'none';
-        });
+		document.getElementById('showfetchButton').addEventListener('click', function () {
+		    const uploadForm = document.getElementById('fetchForm');
+		    uploadForm.style.display = uploadForm.style.display === 'none' ? 'block' : 'none';
+		});
+
 
         // Fetch Historical Semi-Annual Plans Dynamically
         document.getElementById('fetchButton').addEventListener('click', function () {
