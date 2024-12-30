@@ -1024,9 +1024,9 @@ def fetch_tasks():
 
             # Apply keyword filter
             if keyword:
-                query += " AND (tasks.description LIKE ? OR monthly_action_items.description LIKE ?)"
+                query += " AND (tasks.description LIKE ? OR tasks.assigned_person LIKE ? OR monthly_action_items.description LIKE ?)"
                 keyword_pattern = f"%{keyword}%"
-                params.extend([keyword_pattern, keyword_pattern])
+                params.extend([keyword_pattern,keyword_pattern, keyword_pattern])
 
             # Apply date range filter
             if start_date and end_date:

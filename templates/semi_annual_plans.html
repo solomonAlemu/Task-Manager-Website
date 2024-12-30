@@ -90,30 +90,29 @@
         </form>
     </section>
 
-    <!-- Fetch Historical Semi-Annual Plans Form -->
-    <section>
-        <form id="fetchForm" class="fetch-form" style="display: none;">
-            <h3>Fetch Historical Semi-Annual Plans</h3>
-            <select name="status" id="status">
-                <option value="">All</option>
-                <option value="Open">Open</option>
-                <option value="In Progress">In Progress</option>
-                <option value="Completed">Completed</option>
-                <option value="Cancelled">Cancelled</option>
-            </select>
-            <input type="text" id="keyword" name="keyword" placeholder="Search keyword">
-            <div>
-                <label for="start_date">Start Date:</label>
-                <input type="date" id="start_date" name="start_date">
-            </div>
-            <div>
-                <label for="end_date">End Date:</label>
-                <input type="date" id="end_date" name="end_date">
-            </div>
-            <button type="button" id="fetchButton">Fetch Plans</button>
-        </form>
-        <div id="planResults"></div> <!-- Container to display fetched plan results -->
-    </section>
+	<!-- Fetch Historical Semi-Annual Plans Form -->
+	<section>
+	    <form id="fetchForm" class="fetch-form" style="display: none;">
+	        <h3>Fetch Historical Semi-Annual Plans</h3>
+	        <select name="status" id="status">
+	            <option value="">All</option>
+	            <option value="Open">Open</option>
+	            <option value="In Progress">In Progress</option>
+	            <option value="Completed">Completed</option>
+	            <option value="Cancelled">Cancelled</option>
+	        </select>
+	        <input type="text" id="keyword" name="keyword" placeholder="Search keyword">
+	        <div>
+	            <label for="start_date_fetch">Start Date:</label>
+	            <input type="date" id="start_date_fetch" name="start_date_fetch">
+	        </div>
+	        <div>
+	            <label for="end_date_fetch">End Date:</label>
+	            <input type="date" id="end_date_fetch" name="end_date_fetch">
+	        </div>
+	        <button type="button" id="fetchButton">Fetch Plans</button>
+	    </form>
+	</section>
 
     <!-- Display Current Semi-Annual Plans -->
     <section>
@@ -206,25 +205,78 @@
     
     <script>
  
-		// Toggle the visibility of the upload form
-		document.getElementById('showFormButton').addEventListener('click', function () {
-		    const uploadForm = document.getElementById('addPlanForm');
-		    uploadForm.style.display = uploadForm.style.display === 'none' ? 'block' : 'none';
+		document.addEventListener('DOMContentLoaded', () => {
+		    // Function to Set Default Date Values for fetchForm
+		    function setDefaultFetchFormDates() {
+		        const startDateInput = document.getElementById('start_date_fetch');
+		        const endDateInput = document.getElementById('end_date_fetch');
+
+		        if (startDateInput && endDateInput) {
+		            // Set max date to today
+		            const today = new Date();
+		            const todayString = today.toISOString().split('T')[0];  // Format as YYYY-MM-DD
+		            endDateInput.value = todayString;
+
+		            // Set start date to one month before today
+		            const oneMonthAgo = new Date(today);
+		            oneMonthAgo.setMonth(today.getMonth() - 1);  // Go back one month
+		            const startDateString = oneMonthAgo.toISOString().split('T')[0];  // Format as YYYY-MM-DD
+		            startDateInput.value = startDateString;
+
+		            console.log(`Fetch Form - Start Date: ${startDateInput.value}, End Date: ${endDateInput.value}`);
+		        } else {
+		            console.log('Start Date or End Date input for fetchForm not found');
+		        }
+		    }
+
+		    // Function to Set Default Date Values for addPlanForm
+		    function setDefaultAddPlanFormDates() {
+		        const startDateInput = document.getElementById('start_date');
+		        const endDateInput = document.getElementById('end_date');
+
+		        if (startDateInput && endDateInput) {
+		            // Set start date to today
+		            const today = new Date();
+		            const todayString = today.toISOString().split('T')[0];  // Format as YYYY-MM-DD
+		            startDateInput.value = todayString;
+
+		            // Set end date to six months from today
+		            const sixMonthsLater = new Date(today);
+		            sixMonthsLater.setMonth(today.getMonth() + 6);  // Go forward six months
+		            const endDateString = sixMonthsLater.toISOString().split('T')[0];  // Format as YYYY-MM-DD
+		            endDateInput.value = endDateString;
+
+		            console.log(`Add Plan Form - Start Date: ${startDateInput.value}, End Date: ${endDateInput.value}`);
+		        } else {
+		            console.log('Start Date or End Date input for addPlanForm not found');
+		        }
+		    }
+
+		    // Function to Toggle Visibility
+		    function toggleVisibility(buttonId, formId) {
+		        document.getElementById(buttonId).addEventListener('click', function () {
+		            const form = document.getElementById(formId);
+		            form.style.display = form.style.display === 'none' ? 'block' : 'none';
+
+		            // Set default date values if form ID is fetchForm or addPlanForm
+		            if (formId === 'fetchForm') {
+		                setDefaultFetchFormDates();
+		            } else if (formId === 'addPlanForm') {
+		                setDefaultAddPlanFormDates();
+		            }
+		        });
+		    }
+
+		    // Attach Event Listeners
+		    toggleVisibility('showfetchButton', 'fetchForm');
+		    toggleVisibility('showUpload', 'uploadForm');
+		    toggleVisibility('showFormButton', 'addPlanForm');
+
+		    // Set default dates on page load for fetchForm and addPlanForm
+		    setDefaultFetchFormDates();
+		    setDefaultAddPlanFormDates();
 		});
-				
-        // Toggle the visibility of the upload form
-        document.getElementById('showUpload').addEventListener('click', function () {
-            const uploadForm = document.getElementById('uploadForm');
-            uploadForm.style.display = uploadForm.style.display === 'none' ? 'block' : 'none';
-        });
-
-        // Toggle the visibility of the fetch form
-		document.getElementById('showfetchButton').addEventListener('click', function () {
-		    const uploadForm = document.getElementById('fetchForm');
-		    uploadForm.style.display = uploadForm.style.display === 'none' ? 'block' : 'none';
-		});
-
-
+		
         // Fetch Historical Semi-Annual Plans Dynamically
         document.getElementById('fetchButton').addEventListener('click', function () {
             const status = document.getElementById('status').value;

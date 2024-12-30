@@ -217,6 +217,23 @@
 			            const form = document.getElementById(formId);
 			            form.style.display = form.style.display === 'none' ? 'block' : 'none';
 			        });
+					// Set default date values if form ID is fetchForm
+					if (formId === 'fetchForm') {
+					    const startDateInput = document.getElementById('start_date');
+					    const endDateInput = document.getElementById('end_date');
+
+					    // Set max date to today
+					    const today = new Date();
+					    const todayString = today.toISOString().split('T')[0];  // Format as YYYY-MM-DD
+					    endDateInput.value = todayString;
+
+					    // Set start date to one month before today
+					    const oneMonthAgo = new Date(today);
+					    oneMonthAgo.setMonth(today.getMonth() - 1);  // Go back one month
+					    const startDateString = oneMonthAgo.toISOString().split('T')[0];  // Format as YYYY-MM-DD
+					    startDateInput.value = startDateString;
+					}		
+					
 			    }
 
 			    // Attach Event Listeners

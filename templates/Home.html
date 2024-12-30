@@ -72,7 +72,7 @@
                 <option value="Completed">Completed</option>
                 <option value="Cancelled">Cancelled</option>
             </select>
-            <input type="text" id="fetch_keyword" name="keyword" placeholder="Search by keyword or monthly action description">
+            <input type="text" id="fetch_keyword" name="keyword" placeholder="Search by task keyword or assgined person or monthly action description">
             <div>
                 <label for="fetch_start_date">Start Date:</label>
                 <input type="date" id="fetch_start_date" name="start_date">
@@ -613,12 +613,31 @@
         // Call this function for each task after the DOM is loaded
 	document.addEventListener('DOMContentLoaded', () => {
 		// Function to Toggle Visibility
+		// Function to Toggle Visibility
 		function toggleVisibility(buttonId, formId) {
 		    document.getElementById(buttonId).addEventListener('click', function () {
 		        const form = document.getElementById(formId);
 		        form.style.display = form.style.display === 'none' ? 'block' : 'none';
+
+		        // Set default date values if form ID is fetchForm
+		        if (formId === 'fetchForm') {
+		            const startDateInput = document.getElementById('fetch_start_date');
+		            const endDateInput = document.getElementById('fetch_end_date');
+
+		            // Set max date to today
+		            const today = new Date();
+		            const todayString = today.toISOString().split('T')[0];  // Format as YYYY-MM-DD
+		            endDateInput.value = todayString;
+
+		            // Set start date to one month before today
+		            const oneMonthAgo = new Date(today);
+		            oneMonthAgo.setMonth(today.getMonth() - 1);  // Go back one month
+		            const startDateString = oneMonthAgo.toISOString().split('T')[0];  // Format as YYYY-MM-DD
+		            startDateInput.value = startDateString;
+		        }
 		    });
 		}
+
 
 		// Attach Event Listeners
 		toggleVisibility('showFormButton', 'addTaskForm');
