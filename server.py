@@ -497,7 +497,7 @@ def add_task():
                     SET current_value = (
                         SELECT COALESCE(SUM(portion), 0)
                         FROM tasks
-                        WHERE monthly_action_id = ? AND status = 'Completed'
+                        WHERE monthly_action_id = ?
                     ),
                     percentage_completion = (
                         SELECT ROUND(COALESCE(SUM(portion), 0) * 100.0 / target_portion)
