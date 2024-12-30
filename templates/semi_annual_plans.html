@@ -46,7 +46,7 @@
                 <label for="notes">Notes</label>
                 <textarea name="notes" id="notes"></textarea>
             </div>
-            <button type="submit" onclick="return confirm('Are you sure you want to add this plan?')">Add Semi-Annual Plan</button>
+            <button id="submitaddPlanForm" type="submit" onclick="return confirm('Are you sure you want to add this plan?')">Add Semi-Annual Plan</button>
         </form>
     </section>
 
@@ -86,11 +86,12 @@
                 <label for="file">Select File (CSV or Excel):</label>
                 <input type="file" name="file" id="file" accept=".csv, .xls, .xlsx" required>
             </div>
-            <button type="submit">Upload</button>
+            <button id="submituploadForm" type="submit">Upload</button>
         </form>
     </section>
 
 	<!-- Fetch Historical Semi-Annual Plans Form -->
+ 
 	<section>
 	    <form id="fetchForm" class="fetch-form" style="display: none;">
 	        <h3>Fetch Historical Semi-Annual Plans</h3>
@@ -113,6 +114,9 @@
 	        <button type="button" id="fetchButton">Fetch Plans</button>
 	    </form>
 	</section>
+
+	<!-- Container to display fetched plans -->
+	<div id="planResults"></div>
 
     <!-- Display Current Semi-Annual Plans -->
     <section>
@@ -271,83 +275,86 @@
 		    toggleVisibility('showfetchButton', 'fetchForm');
 		    toggleVisibility('showUpload', 'uploadForm');
 		    toggleVisibility('showFormButton', 'addPlanForm');
-
+			
+			toggleVisibility('fetchButton', 'fetchForm');
+			toggleVisibility('submituploadForm', 'uploadForm');
+			toggleVisibility('submitaddPlanForm', 'addPlanForm');
 		    // Set default dates on page load for fetchForm and addPlanForm
 		    setDefaultFetchFormDates();
 		    setDefaultAddPlanFormDates();
 		});
 		
-        // Fetch Historical Semi-Annual Plans Dynamically
-        document.getElementById('fetchButton').addEventListener('click', function () {
-            const status = document.getElementById('status').value;
-            const keyword = document.getElementById('keyword').value;
-            const start_date = document.getElementById('start_date').value;
-            const end_date = document.getElementById('end_date').value;
+		document.getElementById('fetchButton').addEventListener('click', function () {
+		    const status = document.getElementById('status').value;
+		    const keyword = document.getElementById('keyword').value;
+		    const start_date = document.getElementById('start_date_fetch').value;
+		    const end_date = document.getElementById('end_date_fetch').value;
 
-            const params = new URLSearchParams();
-            if (status) params.append('status', status);
-            if (keyword) params.append('keyword', keyword);
-            if (start_date) params.append('start_date', start_date);
-            if (end_date) params.append('end_date', end_date);
+		    const params = new URLSearchParams();
+		    if (status) params.append('status', status);
+		    if (keyword) params.append('keyword', keyword);
+		    if (start_date) params.append('start_date', start_date);
+		    if (end_date) params.append('end_date', end_date);
 
-            console.log(`Fetching semi-annual plans with params: ${params.toString()}`); // Debugging log
+		    console.log(`Fetching semi-annual plans with params: ${params.toString()}`); // Debugging log
 
-            fetch(`/fetch_historical_semi_annual_plans?${params.toString()}`)
-                .then(response => response.json())
-                .then(data => {
-                    const planResults = document.getElementById('planResults');
-                    planResults.innerHTML = ''; // Clear previous results
+		    fetch(`/fetch_historical_semi_annual_plans?${params.toString()}`)
+		        .then(response => response.json())
+		        .then(data => {
+		            const planResults = document.getElementById('planResults');
+		            planResults.innerHTML = ''; // Clear previous results
 
-                    if (data.success) {
-                        if (data.semi_annual_plans.length === 0) {
-                            planResults.innerHTML = '<p>No plans found.</p>';
-                        } else {
-                            const table = document.createElement('table');
-                            table.className = 'fetch-list';
-                            const thead = `
-                                <thead>
-                                    <tr>
-                                        <th>ID</th>
-                                        <th>Title</th>
-                                        <th>Description</th>
-                                        <th>Target Value</th>
-                                        <th>Start Date</th>
-                                        <th>End Date</th>
-                                        <th>Priority</th>
-                                        <th>Status</th>
-                                        <th>Notes</th>
-                                    </tr>
-                                </thead>`;
-                            table.innerHTML = thead;
+		            if (data.success) {
+		                if (data.semi_annual_plans.length === 0) {
+		                    planResults.innerHTML = '<p>No plans found.</p>';
+		                } else {
+		                    const table = document.createElement('table');
+		                    table.className = 'fetch-list';
+		                    const thead = `
+		                        <thead>
+		                            <tr>
+		                                <th>ID</th>
+		                                <th>Title</th>
+		                                <th>Description</th>
+		                                <th>Target Value</th>
+		                                <th>Start Date</th>
+		                                <th>End Date</th>
+		                                <th>Priority</th>
+		                                <th>Status</th>
+		                                <th>Notes</th>
+		                            </tr>
+		                        </thead>`;
+		                    table.innerHTML = thead;
 
-                            const tbody = document.createElement('tbody');
-                            data.semi_annual_plans.forEach(plan => {
-                                const row = `
-                                    <tr>
-                                        <td>${plan.id}</td>
-                                        <td>${plan.title}</td>
-                                        <td>${plan.description}</td>
-                                        <td>${plan.target_value}</td>
-                                        <td>${plan.start_date}</td>
-                                        <td>${plan.end_date}</td>
-                                        <td>${plan.priority}</td>
-                                        <td>${plan.status}</td>
-                                        <td>${plan.notes}</td>
-                                    </tr>`;
-                                tbody.innerHTML += row;
-                            });
-                            table.appendChild(tbody);
-                            planResults.appendChild(table);
-                        }
-                    } else {
-                        planResults.innerHTML = `<p>Error: ${data.error}</p>`;
-                    }
-                })
-                .catch(error => {
-                    console.error('Error fetching plans:', error);
-                });
-        });
-
+		                    const tbody = document.createElement('tbody');
+		                    data.semi_annual_plans.forEach(plan => {
+		                        const row = `
+		                            <tr>
+		                                <td>${plan.id}</td>
+		                                <td>${plan.title}</td>
+		                                <td>${plan.description}</td>
+		                                <td>${plan.target_value}</td>
+		                                <td>${plan.start_date}</td>
+		                                <td>${plan.end_date}</td>
+		                                <td>${plan.priority}</td>
+		                                <td>${plan.status}</td>
+		                                <td>${plan.notes}</td>
+		                            </tr>`;
+		                        tbody.innerHTML += row;
+		                    });
+		                    table.appendChild(tbody);
+		                    planResults.appendChild(table);
+		                }
+		            } else {
+		                planResults.innerHTML = `<p>Error: ${data.error}</p>`;
+		            }
+		        })
+		        .catch(error => {
+		            console.error('Error fetching plans:', error);
+		            const planResults = document.getElementById('planResults');
+		            planResults.innerHTML = '<p>An error occurred while fetching plans. Please try again later.</p>';
+		        });
+		});  
         function toggleEdit(planId) {
             const editSection = document.getElementById(`edit-section-${planId}`);
             editSection.style.display = editSection.style.display === 'none' ? 'block' : 'none';

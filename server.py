@@ -1727,8 +1727,7 @@ def fetch_historical_semi_annual_plans():
         })
     except sqlite3.Error as e:
         print(f"Database error: {e}")
-        return jsonify({"success": False, "error": "Unable to fetch semi-annual plans"}), 500
-    
+        return jsonify({"success": False, "error": "Unable to fetch semi-annual plans"}), 500 
 @app.route('/delete_semi_annual_plan/<int:plan_id>', methods=['POST'])
 def delete_semi_annual_plan(plan_id):
     """Delete a semi-annual plan along with its related monthly action items."""
