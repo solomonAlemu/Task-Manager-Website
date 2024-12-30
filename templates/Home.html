@@ -5,7 +5,7 @@
 
     <section>
         <h2>Manage Tasks</h2>
-        <button id="showFormButton" type="button" class="show-btn">Add Actions</button>
+        <button id="showFormButton" type="button" class="show-btn">Add Task</button>
         <button id="showUpload" type="button" class="upload-btn">Upload Actions</button>
         <button id="exportButton" type="button" class="export-btn">Export Tasks</button>
         <button type="button" id="showfetchButton" class="btn-fetch">Fetch Historical Actions</button>
@@ -22,32 +22,43 @@
                 <label for="priority">Priority</label>
                 <select id="priority" name="priority">
                     <option value="High">High Priority</option>
-                    <option value="Medium" selected>Medium Priority< option>
+                    <option value="Medium" selected>Medium Priority</option>
                     <option value="Low">Low Priority</option>
                 </select>
             </div>
             <div class="form-group">
-                <label for="monthly_action_id">Monthly Action Item (Optional)</label>
-                <select id="monthly_action_id" name="monthly_action_id">
+                <label for="monthly_action_id_select">Monthly Action Item (Optional)</label>
+                <select id="monthly_action_id_select" name="monthly_action_id" onchange="updateTargetInfo()">
+					{% for action in monthly_actions %}
                     <option value="">Select Monthly Action Item</option>
-                    {% for action in monthly_actions %}
-                    <option value="{{ action[0] }}">{{ action[1] }} ({{ action[2] }} Priority)</option>
+					<option value="{{ action.id }}"
+					        data-desc="{{ action.description }}"
+					        data-priority="{{ action.priority }}"
+							data-target="{{ action.target_portion }}"
+							data-allocated="{{ action.current_value }}">      
+							{{ action[1] }} ({{ action[2] }} Priority)
+					</option>					
                     {% endfor %}
-                </select>
+                </select>			
+				<div class="form-group" id="target_portion_group" style="display: none;">
+				    <label for="target_portion">Target Portion</label>
+				    <input type="number" name="portion" id="target_portion" step="0.01" min="0">
+				    <span id="target_info"></span>
+				</div>					
             </div>
-            <div class="form-group">
-                <label for="recipients">Assigned Person</label>
-                <input type="text" id="emailSearch_0" class="email-search-input form-control" placeholder="Search recipient by keyword" oninput="searchEmailRecipients(0, this.value)">
-                <ul id="emailResults_0" class="email-results-list" />
-                <div id="selectedEmails_0" class="selected-emails-container" />
-                <!-- Hidden input for recipients -->
-                <input type="hidden" id="recipientsJson" name="recipients">
-            </div>
-            <div class="form-group">
-                <label for="due_date">Due Date</label>
-                <input type="date" id="due_date" name="due_date">
-            </div>
-            <button type="submit" id="addTaskButton" class="btn-addTask">Add Task</button>
+			<div class="form-group">
+			    <label for="due_date">Due Date</label>
+			    <input type="date" id="due_date" name="due_date">
+			</div>	
+			<div class="form-group">
+			    <label for="emailSearch_0">Assigned Person</label>
+			    <input type="text" id="emailSearch_0" name="assignedPerson" class="email-search-input form-control" placeholder="Search recipient by keyword" oninput="searchEmailRecipients(0, this.value)">
+			    <ul id="emailResults_0" class="email-results-list"></ul>
+			    <div id="selectedEmails_0" class="selected-emails-container"></div>
+			    <!-- Hidden input for recipients -->
+			    <input type="hidden" id="recipientsJson" name="recipients">
+			</div>
+			<button type="submit" id="addTaskButton" class="btn-addTask">Add Task</button>		
         </form>
     </section>
     <section>
@@ -200,14 +211,25 @@
 								    <div class="form-group">
 								        <input type="date" name="due_date" placeholder="Revised Due Date">
 								    </div>
-								    <div class="form-group">
-								        <select name="monthly_action_id" placeholder="Revised Monthly Action Item">
-								            <option value="">Select Monthly Action Item</option>
-								            {% for action in monthly_actions %}
-								            <option value="{{ action[0] }}">{{ action[1] }} ({{ action[2] }} Priority)</option>
-								            {% endfor %}
-								        </select>
-								    </div>
+									<div class="form-group">
+									    <select id="monthly_action_id_select_2" name="monthly_action_id" onchange="updateTargetInfo_2()">
+											{% for action in monthly_actions %}
+									        <option value="">Select Monthly Action Item</option>
+											<option value="{{ action.id }}"
+											        data-desc="{{ action.description }}"
+											        data-priority="{{ action.priority }}"
+													data-target="{{ action.target_portion }}"
+													data-allocated="{{ action.current_value }}">      
+													{{ action[1] }} ({{ action[2] }} Priority)
+											</option>					
+									        {% endfor %}
+									    </select>			
+										<div class="form-group" id="target_portion_group_2" style="display: none;">
+										    <label for="target_portion">Target Portion</label>
+										    <input type="number" name="portion" id="target_portion_2" step="0.01" min="0">
+										    <span id="target_info_2"></span>
+										</div>					
+									</div>
 								</div>
 								<button type="submit" class="status-btn" onclick="return confirm('Are you sure you want to update this item?')">Update</button>
 						    </div>
@@ -243,8 +265,8 @@
 							    <button type="submit" class="btn btn-primary">Request Justification</button>
 							</form>							
 						    <form action="{{ url_for('approve_task', task_id=task.id) }}" method="POST">
-						        <button type="submit" name="status" value="approved" class="btn btn-success">Approve</button>
-						        <button type="submit" name="status" value="rejected" class="btn btn-danger">Reject</button>
+						        <button type="submit" name="status" value="Approved!" class="btn btn-success">Approve</button>
+						        <button type="submit" name="status" value="Rejected!" class="btn btn-danger">Reject</button>
 						    </form>
 						    {% endif %}
 
@@ -319,6 +341,21 @@
     </section>
 	</div>	
     <script>
+		
+		document.getElementById('addTaskForm').addEventListener('submit', function(event) {
+		    // Get selected recipients from the container
+		    const selectedEmailsContainer = document.getElementById('selectedEmails_0');
+		    const recipients = Array.from(selectedEmailsContainer.children).map(emailDiv => ({
+		        name: emailDiv.textContent.split(' (')[0].trim(),
+		        email: emailDiv.dataset.email
+		    }));
+
+		    // Populate the hidden input with the JSON string
+		    document.getElementById('recipientsJson').value = JSON.stringify(recipients);
+
+		    // Debugging: Log the value for verification
+		    console.log("Recipients JSON:", document.getElementById('recipientsJson').value);
+		});		
         // Fetch Tasks Dynamically
         document.getElementById('fetchButton').addEventListener('click', function() {
             const status = document.getElementById('fetch_status').value;
@@ -515,29 +552,30 @@
                 document.getElementById(`emailResults_${taskId}`).innerHTML = '';
                 return;
             }
-            fetch(` search-emails?keyword=${encodeURIComponent(keyword)}`).then(response => response.json())
-                .then(data => {
-                    const resultsContainer = document.getElementById(`emailResults_${taskId}`);
-                    resultsContainer.innerHTML = '';
+			    fetch(`/search-emails?keyword=${encodeURIComponent(keyword)}`)
+			        .then(response => response.json())
+			        .then(data => {
+			            const resultsContainer = document.getElementById(`emailResults_${taskId}`);
+			            resultsContainer.innerHTML = '';
 
-                    if (data.success && data.users.length > 0) {
-                        data.users.forEach(user => {
-                            const li = document.createElement('li');
-                            li.className = 'email-result-item';
-                            li.textContent = `${user.name} (${user.email})`;
-                            li.onclick = () => selectEmail(taskId, user);
-                            resultsContainer.appendChild(li);
-                        });
-                    } else {
-                        resultsContainer.innerHTML = '<li class="email-result-item">No matches found</li>';
-                    }
-                })
-                .catch(error => {
-                    console.error('Error searching emails:', error);
-                    document.getElementById(`emailResults_${taskId}`).innerHTML =
-                        '<li class="email-result-item">Error searching for emails</li>';
-                });
-        }
+			            if (data.success && data.users.length > 0) {
+			                data.users.forEach(user => {
+			                    const li = document.createElement('li');
+			                    li.className = 'email-result-item';
+			                    li.textContent = `${user.name} (${user.email})`;
+			                    li.onclick = () => selectEmail(taskId, user);
+			                    resultsContainer.appendChild(li);
+			                });
+			            } else {
+			                resultsContainer.innerHTML = '<li class="email-result-item">No matches found</li>';
+			            }
+			        })
+			        .catch(error => {
+			            console.error('Error searching emails:', error);
+			            document.getElementById(`emailResults_${taskId}`).innerHTML = 
+			                '<li class="email-result-item">Error searching for emails</li>';
+			        });
+			}
 
         // Select email recipient
         function selectEmail(taskId, user) {
@@ -629,6 +667,24 @@
 	});	
         // Handle form submission
         document.getElementById('addTaskButton').addEventListener('submit', function(event) {
+			
+			
+			const planSelect = document.getElementById('monthly_action_id_select');
+			const targetInput = document.getElementById('target_portion');
+
+			if (planSelect.value) {
+			    const option = planSelect.selectedOptions[0];
+			    const target = parseFloat(option.dataset.target);
+			    const allocated = parseFloat(option.dataset.allocated);
+			    const remaining = target - allocated;
+			    const portion = parseFloat(targetInput.value) || 0;
+			    
+			    if (portion > remaining) {
+			        e.preventDefault();
+			        alert(`Target portion cannot exceed remaining target (${remaining} units)`);
+			    }
+			}			
+			
             // Get selected recipients from the container
             const selectedEmailsContainer = document.getElementById('selectedEmails_0');
             const recipients = Array.from(selectedEmailsContainer.children).map(emailDiv => ({
@@ -700,7 +756,45 @@
                 });
         }
  
-
+		function updateTargetInfo() {
+		    const planSelect = document.getElementById('monthly_action_id_select');
+		    const targetGroup = document.getElementById('target_portion_group');
+		    const targetInput = document.getElementById('target_portion');
+		    const targetInfo = document.getElementById('target_info');
+		    
+		    if (planSelect.value) {
+		        const option = planSelect.selectedOptions[0];
+		        const target = parseFloat(option.dataset.target);
+		        const allocated = parseFloat(option.dataset.allocated);
+		        const remaining = target - allocated;
+		        
+		        targetGroup.style.display = 'block';
+		        targetInput.max = remaining;
+		        targetInfo.textContent = `Available: ${remaining} units`;
+		    } else {
+		        targetGroup.style.display = 'none';
+		    }
+		}
+		function updateTargetInfo_2() {
+		    const planSelect = document.getElementById('monthly_action_id_select_2');
+		    const targetGroup = document.getElementById('target_portion_group_2');
+		    const targetInput = document.getElementById('target_portion_2');
+		    const targetInfo = document.getElementById('target_info_2');
+		    
+		    if (planSelect.value) {
+		        const option = planSelect.selectedOptions[0];
+		        const target = parseFloat(option.dataset.target);
+		        const allocated = parseFloat(option.dataset.allocated);
+		        const remaining = target - allocated;
+		        
+		        targetGroup.style.display = 'block';
+		        targetInput.max = remaining;
+		        targetInfo.textContent = `Available: ${remaining} units`;
+		    } else {
+		        targetGroup.style.display = 'none';
+		    }
+		}		
+		
         function toggleUpdates(taskId) {
             const updateSection = document.getElementById(`update-section-${taskId}`);
             updateSection.style.display = updateSection.style.display === 'none' ? 'block' : 'none';

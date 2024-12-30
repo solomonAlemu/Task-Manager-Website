@@ -151,7 +151,10 @@
                     <td>{{ action.priority }}</td>
                     <td>{{ action.due_date or '' }}</td>
                     <td>{{ action.status }}</td>
-                    <td>{{ action.percentage_completion if action.percentage_completion else "0"}} %</td>
+					<td>
+					    {{ action.current_value }}/{{ action.target_portion }}
+					    ({{ action.percentage_completion }}%)
+					</td>					
                     <td>
 						<button type="button" id="show-status-btn-{{ action[0] }}" class="show-btn" onclick="toggleUpdates_2({{ action[0] }})">Edit Action</button>
 						<form action="{{ url_for('update_monthly_action', action_id=action[0]) }}" method="post">

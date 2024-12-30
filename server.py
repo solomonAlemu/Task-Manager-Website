@@ -20,6 +20,7 @@ import csv
 from io import StringIO
 from io import BytesIO, TextIOWrapper
 from flask import flash
+from pandas.core.arrays import integer
 
 # Initialize Flask app
 app = Flask(__name__)
@@ -54,7 +55,7 @@ def init_db():
     with sqlite3.connect(DATABASE) as conn:
         cursor = conn.cursor()
 
-        # First, create the user_roles table since other tables depend on it
+        # User roles table (no change)
         cursor.execute('''
         CREATE TABLE IF NOT EXISTS user_roles (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -112,6 +113,8 @@ def init_db():
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             user_id INTEGER NOT NULL,
             description TEXT NOT NULL,
+            target_value REAL,
+            current_value REAL DEFAULT 0,           
             priority TEXT NOT NULL,
             status TEXT NOT NULL DEFAULT 'Open',
             due_date TEXT DEFAULT NULL,
@@ -120,12 +123,12 @@ def init_db():
             created_at TEXT DEFAULT (DATETIME('now', 'localtime')),
             semi_annual_plan_id INTEGER,
             target_portion REAL DEFAULT 0,
-            FOREIGN KEY(semi_annual_plan_id) REFERENCES semi_annual_plans(id),
+            FOREIGN KEY(semi_annual_plan_id) REFERENCES semi_annual_plans(id) ON DELETE CASCADE,
             FOREIGN KEY(user_id) REFERENCES users(id)
         )
         ''')
 
-        # Add semi-annual action plans table
+        # Semi-annual plans table (no change)
         cursor.execute('''
         CREATE TABLE IF NOT EXISTS semi_annual_plans (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -144,8 +147,8 @@ def init_db():
             FOREIGN KEY(user_id) REFERENCES users(id)
         )
         ''')
-        
-        # Tasks table with approval workflow
+
+        # Tasks table with `portion` column
         cursor.execute('''
         CREATE TABLE IF NOT EXISTS tasks (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -159,18 +162,45 @@ def init_db():
             updates TEXT DEFAULT '',
             due_date TEXT DEFAULT NULL,
             monthly_action_id INTEGER,
+            portion REAL DEFAULT 0,
             created_at TEXT DEFAULT (DATETIME('now', 'localtime')),
             assigned_by INTEGER,
             requires_approval INTEGER DEFAULT 0,
             approved_by INTEGER DEFAULT NULL,
             approval_status TEXT DEFAULT 'Pending',
             FOREIGN KEY(user_id) REFERENCES users(id),
-            FOREIGN KEY(monthly_action_id) REFERENCES monthly_action_items(id),
+            FOREIGN KEY(monthly_action_id) REFERENCES monthly_action_items(id) ON DELETE CASCADE,
             FOREIGN KEY(assigned_by) REFERENCES users(id),
             FOREIGN KEY(approved_by) REFERENCES users(id)
         )
         ''')
-        # Add a trigger to update semi-annual plan progress
+        # Trigger to update monthly action plan progress (no change)
+        cursor.execute('''
+        CREATE TRIGGER IF NOT EXISTS update_monthly_action_progress
+        AFTER UPDATE ON tasks
+        WHEN NEW.status = 'Completed' AND OLD.status != 'Completed'
+        BEGIN
+            UPDATE monthly_action_items
+            SET current_value = (
+                SELECT COALESCE(SUM(portion), 0)
+                FROM tasks
+                WHERE monthly_action_id = NEW.monthly_action_id
+                AND status = 'Completed'
+            ),
+            percentage_completion = (
+                SELECT ROUND(COALESCE(SUM(portion), 0) * 100.0 / target_portion)
+                FROM tasks
+                WHERE monthly_action_id = NEW.monthly_action_id
+                AND status = 'Completed'
+            )
+            WHERE id = NEW.monthly_action_id;
+
+            UPDATE monthly_action_items
+            SET status = 'Completed'
+            WHERE id = NEW.monthly_action_id
+            AND current_value >= target_portion;
+        END;
+        ''')
         cursor.execute('''
         CREATE TRIGGER IF NOT EXISTS update_semi_annual_plan_progress
         AFTER UPDATE ON monthly_action_items
@@ -198,8 +228,10 @@ def init_db():
             AND current_value >= target_value;
         END;
         ''')
+        
         # Commit all changes
         conn.commit()
+
 # Initialize the database if not already done
 if not os.path.exists(DATABASE):
     init_db()
@@ -292,7 +324,7 @@ def home():
 
             # Fetch monthly action items for task creation dropdown
             cursor.execute("""
-                SELECT id, description, priority 
+                SELECT id, description, priority, current_value, target_portion 
                 FROM monthly_action_items 
                 WHERE user_id = ? AND status IN ('Open', 'In Progress')
             """, (user_id,))
@@ -303,7 +335,6 @@ def home():
         return f"An error occurred: {e}", 500
 
 # Add these new routes to server.py
-
 @app.route('/assign-task', methods=['POST'])
 def assign_task():
     if 'user_id' not in session:
@@ -362,102 +393,127 @@ def assign_task():
 def add_task():
     """Add a new task with optional monthly action item link."""
     if 'user_id' not in session:
+        flash("Unauthorized access. Please log in.", "error")
         return redirect(url_for('login'))
 
-    user_id = session['user_id']  # Get logged-in user's ID
+    user_id = session['user_id']
     description = request.form.get('description', '').strip()
+    try:
+        portion = float(request.form.get('portion', 0))
+    except ValueError:
+        portion = 0
     priority = request.form.get('priority', 'Medium')
     due_date = request.form.get('due_date', '').strip()
     monthly_action_id = request.form.get('monthly_action_id')
-    recipients = request.form.get('recipients', '[]')  # Get recipients JSON
+    recipients = request.form.get('recipients', '[]')
 
-    # Debug: Log form data and recipients
-    print("Form Data:", request.form)
-    print("Recipients JSON:", recipients)
-
-    # Parse recipients
     try:
         recipients = json.loads(recipients)
-        # Convert the list of names into a comma-separated string
         assigned_person = ", ".join(recipient['name'] for recipient in recipients)
     except json.JSONDecodeError:
-        assigned_person = ""  # Default to empty string if invalid JSON
+        assigned_person = ""
 
     if not description:
-        return "Error: Task description cannot be empty!", 400
+        flash("Description is required.", "error")
+        return redirect(url_for('home'))
 
     try:
         with get_db_connection() as conn:
             cursor = conn.cursor()
+
             # Retrieve assignee_id from assigned_person reference
+            assignee_id = None
             if assigned_person:
-                cursor.execute(
-                    "SELECT id FROM users WHERE username = ?",
-                    (assigned_person,)
-                )
+                cursor.execute("SELECT id FROM users WHERE username = ?", (assigned_person,))
                 assignee_row = cursor.fetchone()
                 if not assignee_row:
-                    return "Error: Assigned person not found!", 400
+                    flash("Error: Assigned person not found!", "error")
+                    return redirect(url_for('home'))
                 assignee_id = assignee_row[0]
-            else:
-                assignee_id = None
+
+            # Validate portion against monthly action target if provided
+            if monthly_action_id:
+                cursor.execute("""
+                    SELECT ma.target_portion,
+                           (SELECT COALESCE(SUM(portion), 0)
+                            FROM tasks
+                            WHERE monthly_action_id = ?) as allocated_portions
+                    FROM monthly_action_items ma
+                    WHERE ma.id = ?
+                """, (monthly_action_id, monthly_action_id))
+                
+                action_data = cursor.fetchone()
+                if action_data:
+                    total_target = action_data[0] or 0
+                    allocated = action_data[1] or 0
+                    remaining = total_target - allocated
+
+                    if portion > remaining:
+                        flash(f"Error: Portion ({portion}) exceeds remaining target ({remaining}).", "error")
+                        return redirect(url_for('home'))
 
             # Check task assignment hierarchy if assignee_id is provided
             if assignee_id:
-                # Get assigner's role
-                cursor.execute(
-                    "SELECT role FROM users WHERE id = ?",
-                    (user_id,)
-                )
+                cursor.execute("SELECT role FROM users WHERE id = ?", (user_id,))
                 assigner_role = cursor.fetchone()[0]
 
-                # Get assignee's role
-                cursor.execute(
-                    "SELECT role FROM users WHERE id = ?",
-                    (assignee_id,)
-                )
+                cursor.execute("SELECT role FROM users WHERE id = ?", (assignee_id,))
                 assignee_role = cursor.fetchone()[0]
 
-                # Check if assignment is allowed based on hierarchy
-                cursor.execute(
-                    """
+                cursor.execute("""
                     SELECT r1.role_level as assigner_level, r2.role_level as assignee_level
                     FROM user_roles r1, user_roles r2
                     WHERE r1.role_name = ? AND r2.role_name = ?
-                    """,
-                    (assigner_role, assignee_role),
-                )
+                """, (assigner_role, assignee_role))
+                
                 levels = cursor.fetchone()
                 if not levels or levels[0] > levels[1]:
-                    return "Error: Invalid task assignment hierarchy", 403
+                    flash("Error: Invalid task assignment hierarchy", "error")
+                    return redirect(url_for('home'))
 
-            # Insert the task into the database
-            cursor.execute(
-                """
+            # Insert the task
+            cursor.execute("""
                 INSERT INTO tasks (
-                    user_id, assigned_person, description, priority, due_date, 
+                    user_id, assigned_person, description, priority, due_date, portion,
                     status, monthly_action_id, assigned_by, requires_approval, approved_by
-                ) VALUES (?, ?, ?, ?, ?, 'Open', ?, ?, ?, ?)
-                """,
-                (
-                    assignee_id if assignee_id else user_id,
-                    assigned_person,
-                    description,
-                    priority,
-                    due_date,
-                    monthly_action_id,
-                    user_id,
-                    1 if assignee_id else 0,  # Requires approval if assigned to someone else
-                    user_id  # The original task assigner as the approver
-                ),
-            )
-            conn.commit()
+                ) VALUES (?, ?, ?, ?, ?, ?, 'Open', ?, ?, ?, ?)
+            """, (
+                assignee_id if assignee_id else user_id,
+                assigned_person,
+                description,
+                priority,
+                due_date,
+                portion,
+                monthly_action_id,
+                user_id,
+                1 if assignee_id else 0,
+                user_id
+            ))
 
-        return redirect(url_for('home'))
+            # Update monthly action progress
+            if monthly_action_id:
+                cursor.execute("""
+                    UPDATE monthly_action_items
+                    SET current_value = (
+                        SELECT COALESCE(SUM(portion), 0)
+                        FROM tasks
+                        WHERE monthly_action_id = ? AND status = 'Completed'
+                    ),
+                    percentage_completion = (
+                        SELECT ROUND(COALESCE(SUM(portion), 0) * 100.0 / target_portion)
+                        FROM tasks
+                        WHERE monthly_action_id = ? AND status = 'Completed'
+                    )
+                    WHERE id = ?
+                """, (monthly_action_id, monthly_action_id, monthly_action_id))
+
+            conn.commit()
+            flash('Task added successfully!', 'success')
+            return redirect(url_for('home'))
+
     except sqlite3.Error as e:
-        print(f"Database error: {e}")
-        return "Error: Unable to add task to the database.", 500
-    
+        flash(f"Error: {e}", "error")
+        return redirect(url_for('home'))
 @app.route('/approve-task/<int:task_id>', methods=['POST'])
 def approve_task(task_id):
     """Approve or reject an approval request for a task from the task assigner."""
@@ -555,7 +611,6 @@ def request_approval(task_id):
         flash("Error: Unable to send approval request.", "error")
         return redirect(url_for('home'))
 
-    
 @app.route('/request-status-update/<int:task_id>', methods=['POST'])
 def request_status_update(task_id):
     """Request a status update for a specific task from the task assigner or reassigner."""
@@ -652,6 +707,7 @@ def request_justification(task_id):
 def update_task(task_id):
     """Update task details for the logged-in user."""
     if 'user_id' not in session:
+        flash("Unauthorized access. Please log in.", "error")
         return redirect(url_for('login'))
 
     user_id = session['user_id']
@@ -661,14 +717,14 @@ def update_task(task_id):
     description = request.form.get('revised_description', '').strip()
     priority = request.form.get('priority', 'Medium')
     due_date = request.form.get('due_date', '').strip()
+    portion = request.form.get('portion', 0)
     monthly_action_id = request.form.get('monthly_action_id')
     recipients = request.form.get('recipients', '[]')  # Get recipients JSON
 
-    # Debug: Log form data and recipients
-    print("Form Data:", request.form)
-    print("Task ID:", task_id)
-    print("User ID:", user_id)
-    print("Recipients JSON:", recipients)
+    try:
+        portion = float(portion) if portion else 0
+    except ValueError:
+        portion = 0
 
     # Parse recipients
     try:
@@ -676,7 +732,7 @@ def update_task(task_id):
         # Convert the list of names into a comma-separated string
         assigned_person = ", ".join(recipient['name'] for recipient in recipients)
     except json.JSONDecodeError:
-        assigned_person = ""  # Default to empty string if invalid JSON
+        assigned_person = ""
 
     if percentage_completion:
         try:
@@ -687,6 +743,7 @@ def update_task(task_id):
         percentage_completion = None
 
     try:
+
         with get_db_connection() as conn:
             cursor = conn.cursor()
 
@@ -701,7 +758,9 @@ def update_task(task_id):
 
             # Fetch the existing task
             cursor.execute("""
-                SELECT assigned_person, description, priority, status, percentage_completion, updates, due_date, monthly_action_id, approved_by, approval_status, assigned_by
+                SELECT assigned_person, description, priority, status, percentage_completion, 
+                       updates, due_date, monthly_action_id, approved_by, approval_status, 
+                       assigned_by, portion
                 FROM tasks
                 WHERE id = ? AND (user_id = ? OR assigned_by = ? OR approved_by = ? OR assigned_person = (
                     SELECT username FROM users WHERE id = ?
@@ -710,9 +769,13 @@ def update_task(task_id):
             task = cursor.fetchone()
 
             if not task:
-                print("Error: Task not found or unauthorized.")
-                return "Error: Task not found or unauthorized.", 404
-            current_assigned_person, current_description, current_priority, current_status, current_percentage, current_updates, current_due_date, current_monthly_action_id, current_approved_by, current_approval_status, current_assigned_by = task
+                flash("Error: Task not found or unauthorized.", "error")
+                return redirect(url_for('home'))
+
+            current_assigned_person, current_description, current_priority, current_status, \
+            current_percentage, current_updates, current_due_date, current_monthly_action_id, \
+            current_approved_by, current_approval_status, current_assigned_by, current_portion = task
+
 
             # Append new notes to updates
             update_entry = (
@@ -736,6 +799,8 @@ def update_task(task_id):
                 due_date = current_due_date
             if not monthly_action_id:
                 monthly_action_id = current_monthly_action_id
+            if not portion:
+                portion = current_portion
 
             # Retrieve assignee_id from assigned_person reference
             if assigned_person:
@@ -759,14 +824,12 @@ def update_task(task_id):
                     (user_id,)
                 )
                 assigner_role = cursor.fetchone()[0]
-
                 # Get assignee's role
                 cursor.execute(
                     "SELECT role FROM users WHERE id = ?",
                     (assignee_id,)
                 )
                 assignee_role = cursor.fetchone()[0]
-
                 # Check if assignment is allowed based on hierarchy
                 cursor.execute(
                     """
@@ -780,41 +843,100 @@ def update_task(task_id):
                 if not levels or levels[0] > levels[1]:
                     print("Error: Invalid task assignment hierarchy")
                     return "Error: Invalid task assignment hierarchy", 403
-
+            if user_id == current_approved_by and status == 'Completed':
+               update_approval = "Approved!" 
+            else:
+               update_approval = "Pending"
             # Update the task without changing the task assigner if the user is an employee
             if user_role == 'Employee':
                 cursor.execute("""
                     UPDATE tasks
                     SET assigned_person = ?, description = ?, priority = ?, status = ?, 
-                        percentage_completion = ?, updates = ?, due_date = ?, monthly_action_id = ?,
+                        percentage_completion = ?, updates = ?, due_date = ?, monthly_action_id = ?, 
                         requires_approval = ?, approved_by = ?, approval_status = ?
                     WHERE id = ? AND (user_id = ? OR assigned_by = ? OR approved_by = ? OR assigned_person = (
                         SELECT username FROM users WHERE id = ?
                     ))
                 """, (assigned_person, description, priority, status, percentage_completion, update_entry,
-                      due_date, monthly_action_id, 1 if assignee_id else 0, current_approved_by, "Pending", task_id, user_id, current_assigned_by, user_id, user_id))
+                      due_date, monthly_action_id, 1 if assignee_id else 0, current_approved_by, update_approval, task_id, user_id, current_assigned_by, user_id, user_id))
             else:
                 cursor.execute("""
                     UPDATE tasks
                     SET assigned_person = ?, description = ?, priority = ?, status = ?, 
-                        percentage_completion = ?, updates = ?, due_date = ?, monthly_action_id = ?,
+                        percentage_completion = ?, updates = ?, due_date = ?, monthly_action_id = ?,  
                         assigned_by = ?, requires_approval = ?, approved_by = ?, approval_status = ?
                     WHERE id = ? AND (user_id = ? OR assigned_by = ? OR approved_by = ? OR assigned_person = (
                         SELECT username FROM users WHERE id = ?
                     ))
                 """, (assigned_person, description, priority, status, percentage_completion, update_entry,
-                      due_date, monthly_action_id, user_id, 1 if assignee_id else 0, current_approved_by, "Pending", task_id, user_id, user_id, user_id, user_id))
+                      due_date, monthly_action_id,  user_id, 1 if assignee_id else 0, current_approved_by, update_approval, task_id, user_id, user_id, user_id, user_id))
 
             conn.commit()
-        return redirect(url_for('home'))
+ 
+
+        # If the task is completed, update the monthly action plan progress
+            if status == 'Completed' and current_status != 'Completed' and monthly_action_id:
+                # Calculate total completed portions for this monthly action
+                cursor.execute("""
+                    SELECT COALESCE(SUM(portion), 0) as completed_portions
+                    FROM tasks
+                    WHERE monthly_action_id = ? AND status = 'Completed'
+                """, (monthly_action_id,))
+                completed_portions = cursor.fetchone()[0]
+
+                # Get the monthly action's target portion
+                cursor.execute("""
+                    SELECT target_portion, semi_annual_plan_id
+                    FROM monthly_action_items
+                    WHERE id = ?
+                """, (monthly_action_id,))
+                monthly_action = cursor.fetchone()
+                target_portion = monthly_action[0]
+                semi_annual_plan_id = monthly_action[1]
+
+                # Update monthly action progress
+                percentage = min(round((completed_portions / target_portion) * 100), 100) if target_portion > 0 else 0
+                cursor.execute("""
+                    UPDATE monthly_action_items
+                    SET current_value = ?,
+                        percentage_completion = ?,
+                        status = CASE 
+                            WHEN ? >= target_portion THEN 'Completed'
+                            ELSE status 
+                        END
+                    WHERE id = ?
+                """, (completed_portions, percentage, completed_portions, monthly_action_id))
+
+                # If monthly action is completed and linked to a semi-annual plan, update it
+                if semi_annual_plan_id and completed_portions >= target_portion:
+                    cursor.execute("""
+                        SELECT COALESCE(SUM(target_portion), 0) as completed_portions
+                        FROM monthly_action_items
+                        WHERE semi_annual_plan_id = ? AND status = 'Completed'
+                    """, (semi_annual_plan_id,))
+                    completed_plan_portions = cursor.fetchone()[0]
+
+                    cursor.execute("""
+                        UPDATE semi_annual_plans
+                        SET current_value = ?,
+                            percentage_completion = ROUND(? * 100.0 / target_value),
+                            status = CASE 
+                                WHEN ? >= target_value THEN 'Completed'
+                                ELSE status 
+                            END
+                        WHERE id = ?
+                    """, (completed_plan_portions, completed_plan_portions, completed_plan_portions, semi_annual_plan_id))
+
+            conn.commit()
+            flash('Task updated successfully!', 'success')
+            return redirect(url_for('home'))
     except sqlite3.Error as e:
         print(f"Database error: {e}")
-        return "Error: Unable to update task.", 500
-
- 
-@app.route('/delete/<int:task_id>', methods=['POST'])
+        flash(f"Error: {e}", "error")
+        return redirect(url_for('home'))
+@app.route('/delete_task/<int:task_id>', methods=['POST'])
 def delete_task(task_id):
-    """Delete a specific task for the logged-in user."""
+    """Delete a specific task and update related monthly action progress."""
     if 'user_id' not in session:
         flash("You need to be logged in to delete tasks.", "error")
         return redirect(url_for('login'))
@@ -825,29 +947,48 @@ def delete_task(task_id):
         with get_db_connection() as conn:
             cursor = conn.cursor()
 
-            # Check if the logged-in user is the one who assigned the task or is the task approver
+            # Get task details before deletion
             cursor.execute("""
-                SELECT t.id
-                FROM tasks t
-                WHERE t.id = ? AND (t.assigned_by = ? OR t.approved_by = ?)
+                SELECT monthly_action_id, status, portion
+                FROM tasks
+                WHERE id = ? AND (assigned_by = ? OR approved_by = ?)
             """, (task_id, user_id, user_id))
             task = cursor.fetchone()
 
             if not task:
                 flash("Error: Task not found or you do not have permission to delete it.", "error")
                 return redirect(url_for('home'))
-            
+
+            monthly_action_id, task_status, task_portion = task
+
             # Delete the task
             cursor.execute("DELETE FROM tasks WHERE id = ?", (task_id,))
-            conn.commit()
 
-        flash("Task deleted successfully.", "success")
-        return redirect(url_for('home'))
+            # Update monthly action progress if task was completed
+            if monthly_action_id and task_status == 'Completed':
+                cursor.execute("""
+                    UPDATE monthly_action_items
+                    SET current_value = (
+                        SELECT COALESCE(SUM(portion), 0)
+                        FROM tasks
+                        WHERE monthly_action_id = ? AND status = 'Completed'
+                    ),
+                    percentage_completion = (
+                        SELECT ROUND(COALESCE(SUM(portion), 0) * 100.0 / target_portion)
+                        FROM tasks
+                        WHERE monthly_action_id = ? AND status = 'Completed'
+                    )
+                    WHERE id = ?
+                """, (monthly_action_id, monthly_action_id, monthly_action_id))
+
+            conn.commit()
+            flash("Task deleted successfully.", "success")
+            return redirect(url_for('home'))
+
     except sqlite3.Error as e:
         print(f"Database error: {e}")
         flash("Error: Unable to delete task.", "error")
         return redirect(url_for('home'))
-
  
 @app.route('/fetch', methods=['GET'])
 def fetch_tasks():
@@ -1082,8 +1223,7 @@ def fetch_actions():
     except sqlite3.Error as e:
         print(f"Database error: {e}")
         return jsonify({"success": False, "error": "Unable to fetch monthly actions"}), 500
-
-
+ 
 @app.route('/delete_historical', methods=['POST'])
 def delete_historical_tasks():
     """Delete historical tasks for the logged-in user."""
@@ -1106,8 +1246,6 @@ def delete_historical_tasks():
         print(f"Database error: {e}")
         return jsonify({"success": False, "error": "Unable to delete tasks."}), 500
 
-# 2. Route Updates (in server.py)
-# 2. Route Updates (in server.py)
 @app.route('/monthly-action', methods=['GET', 'POST'])
 def monthly_action():
     """Manage monthly action items for the logged-in user."""
@@ -1123,23 +1261,23 @@ def monthly_action():
         due_date = request.form.get('due_date')
         notes = request.form.get('notes', '')
         semi_annual_plan_id = request.form.get('semi_annual_plan_id')
-        target_portion = request.form.get('target_portion', None)
+        try:
+            target_portion = float(request.form.get('target_portion', 0))
+        except ValueError:
+            target_portion = 0
         
         if not description:
             flash("Description is required.", "error")
             return redirect(url_for('monthly_action'))
 
         try:
-            if target_portion:
-                target_portion = float(target_portion)
-
             with get_db_connection() as conn:
                 cursor = conn.cursor()
                 
-                if semi_annual_plan_id and target_portion is not None:
+                if semi_annual_plan_id:
                     # Validate target portion against remaining plan target
                     cursor.execute('''
-                        SELECT target_value, current_value,
+                        SELECT target_value,
                         (SELECT COALESCE(SUM(target_portion), 0)
                          FROM monthly_action_items
                          WHERE semi_annual_plan_id = ?)
@@ -1149,85 +1287,39 @@ def monthly_action():
                     
                     plan_data = cursor.fetchone()
                     if plan_data:
-                        total_target = plan_data[0]
-                        allocated = plan_data[2]
+                        total_target = plan_data[0] or 0
+                        allocated = plan_data[1] or 0
                         remaining = total_target - allocated
                         
                         if target_portion > remaining:
-                            flash("Error: Target portion exceeds remaining plan target.", "error")
+                            flash(f"Error: Target portion ({target_portion}) exceeds remaining plan target ({remaining}).", "error")
                             return redirect(url_for('monthly_action'))
 
                     cursor.execute('''
                         INSERT INTO monthly_action_items 
-                        (user_id, description, priority, due_date, notes, status, semi_annual_plan_id, target_portion)
+                        (user_id, description, priority, due_date, notes, status, 
+                         semi_annual_plan_id, target_portion)
                         VALUES (?, ?, ?, ?, ?, 'Open', ?, ?)
-                    ''', (user_id, description, priority, due_date, notes, semi_annual_plan_id, target_portion))
-                    
-                    # Update the corresponding requirement of the target portion if provided
-                    cursor.execute('''
-                        UPDATE semi_annual_plans
-                        SET current_value = (
-                            SELECT COALESCE(SUM(target_portion), 0)
-                            FROM monthly_action_items
-                            WHERE semi_annual_plan_id = ?
-                        ),
-                        percentage_completion = (
-                            SELECT ROUND(COALESCE(SUM(target_portion), 0) * 100.0 / target_value)
-                            FROM monthly_action_items
-                            WHERE semi_annual_plan_id = ?
-                        )
-                        WHERE id = ?
-                    ''', (semi_annual_plan_id, semi_annual_plan_id, semi_annual_plan_id))
+                    ''', (user_id, description, priority, due_date, notes, 
+                          semi_annual_plan_id, target_portion))
 
                 else:
                     # Insert monthly action item without linking to semi-annual plans
                     cursor.execute('''
                         INSERT INTO monthly_action_items 
-                        (user_id, description, priority, due_date, notes, status)
-                        VALUES (?, ?, ?, ?, ?, 'Open')
-                    ''', (user_id, description, priority, due_date, notes))
+                        (user_id, description, priority, due_date, notes, status, target_portion)
+                        VALUES (?, ?, ?, ?, ?, 'Open', ?)
+                    ''', (user_id, description, priority, due_date, notes, target_portion))
                 
                 conn.commit()
                 flash('Monthly action created successfully!', 'success')
-            return redirect(url_for('monthly_action'))
+                
+        except sqlite3.Error as e:
+            flash(f"Error: {str(e)}", "error")
             
-        except (ValueError, sqlite3.Error) as e:
-            print(f"Error: {e}")
-            return "Error: Invalid input or database error.", 500
+        return redirect(url_for('monthly_action'))
 
-    # Fetch active semi-annual plans for the dropdown
-    try:
-        with get_db_connection() as conn:
-            cursor = conn.cursor()
-            cursor.execute('''
-                SELECT sp.id, sp.title, sp.target_value,
-                (SELECT COALESCE(SUM(target_portion), 0)
-                 FROM monthly_action_items
-                 WHERE semi_annual_plan_id = sp.id) as allocated_portions
-                FROM semi_annual_plans sp
-                WHERE sp.user_id = ? AND sp.status != 'Completed'
-            ''', (user_id,))
-            semi_annual_plans = cursor.fetchall()
-            
-            # Fetch existing monthly actions
-            cursor.execute('''
-                SELECT ma.*, sp.title as plan_title, sp.target_value
-                FROM monthly_action_items ma
-                LEFT JOIN semi_annual_plans sp ON ma.semi_annual_plan_id = sp.id
-                WHERE ma.user_id = ? AND ma.status NOT IN ('Completed', 'Cancelled')
-                ORDER BY ma.created_at DESC
-            ''', (user_id,))
-            monthly_actions = cursor.fetchall()
-            
-        return render_template('monthly_action.html', 
-                             monthly_actions=monthly_actions,
-                             semi_annual_plans=semi_annual_plans)
-                             
-    except sqlite3.Error as e:
-        print(f"Database error: {e}")
-        return "Error: Unable to fetch data.", 500
-    
-    # Fetch active semi-annual plans for the dropdown
+    # Fetch active semi-annual plans and monthly actions
     try:
         with get_db_connection() as conn:
             cursor = conn.cursor()
@@ -1243,7 +1335,10 @@ def monthly_action():
             semi_annual_plans = cursor.fetchall()
             
             cursor.execute('''
-                SELECT ma.*, sp.title as plan_title, sp.target_value
+                SELECT ma.*, sp.title as plan_title, sp.target_value,
+                (SELECT COALESCE(SUM(portion), 0)
+                 FROM tasks
+                 WHERE monthly_action_id = ma.id) as allocated_task_portions
                 FROM monthly_action_items ma
                 LEFT JOIN semi_annual_plans sp ON ma.semi_annual_plan_id = sp.id
                 WHERE ma.user_id = ? AND ma.status NOT IN ('Completed', 'Cancelled')
@@ -1251,9 +1346,10 @@ def monthly_action():
             ''', (user_id,))
             monthly_actions = cursor.fetchall()
             
-        return render_template('monthly_action.html', 
-                             monthly_actions=monthly_actions,
-                             semi_annual_plans=semi_annual_plans)
+            return render_template('monthly_action.html', 
+                                monthly_actions=monthly_actions,
+                                semi_annual_plans=semi_annual_plans)
+                                
     except sqlite3.Error as e:
         flash(f"Error: Unable to fetch data. Details: {str(e)}", "error")
         return redirect(url_for('monthly_action'))
@@ -1559,9 +1655,7 @@ def update_semi_annual_plan(plan_id):
         flash(f'Error updating plan: {str(e)}', 'error')
 
     return redirect(url_for('semi_annual_plans'))
-
-
-
+ 
 @app.route('/fetch_historical_semi_annual_plans', methods=['GET'])
 def fetch_historical_semi_annual_plans():
     """Fetch historical semi-annual plans for the logged-in user based on filters."""
@@ -1660,8 +1754,7 @@ def delete_semi_annual_plan(plan_id):
     except sqlite3.Error as e:
         flash(f"Error: Unable to delete semi-annual plan. Details: {str(e)}", "error")
         return redirect(url_for('semi_annual_plans'))
-
-    
+     
 @app.route('/upload_semi_annual_plans', methods=['POST'])
 def upload_semi_annual_plans():
     """Upload and process semi-annual plans for the logged-in user."""
@@ -2358,7 +2451,7 @@ def get_emails():
 @app.route('/search-emails', methods=['GET'])
 def search_emails():
     """
-    Search for email users based on a keyword.
+    Search for email users based on a keyword from the database.
     """
     keyword = request.args.get('keyword', '').strip().lower()  # Retrieve and sanitize keyword
 
@@ -2369,36 +2462,35 @@ def search_emails():
         }), 400
 
     try:
-        # Load email data from the configuration file
-        with open('email_config.json', 'r') as f:
-            email_data = json.load(f)
-        
-        users = email_data.get('users', [])
-        if not users:
-            return jsonify({"success": False, "message": "No users found in the email configuration."}), 404
+        with get_db_connection() as conn:
+            cursor = conn.cursor()
 
-        # Filter users by keyword (match name or email)
-        filtered_users = [
-            user for user in users
-            if keyword in user['name'].lower() or keyword in user['email'].lower()
-        ]
+            # Search for users in the database by matching the keyword with username or email
+            cursor.execute('''
+                SELECT username AS name, email
+                FROM users
+                WHERE LOWER(username) LIKE ? OR LOWER(email) LIKE ?
+            ''', (f'%{keyword}%', f'%{keyword}%'))
 
-        return jsonify({
-            "success": True,
-            "users": filtered_users
-        })
+            users = cursor.fetchall()
 
-    except FileNotFoundError:
-        return jsonify({
-            "success": False,
-            "message": "Email configuration file not found."
-        }), 404
+            # Convert sqlite3.Row objects to dictionaries
+            users = [dict(user) for user in users]
 
-    except json.JSONDecodeError as json_error:
-        print(f"JSON error in /search-emails: {json_error}")
+            if not users:
+                return jsonify({"success": False, "message": "No users found matching the keyword."}), 404
+
+            return jsonify({
+                "success": True,
+                "users": users
+            })
+
+    except sqlite3.Error as e:
+        print(f"Database error in /search-emails: {e}")
         return jsonify({
             "success": False,
-            "message": "Error decoding email configuration file."
+            "message": "An unexpected database error occurred.",
+            "details": str(e)
         }), 500
 
     except Exception as e:
@@ -2534,7 +2626,6 @@ def reset_password():
 
     # Render the password reset form for GET requests
     return render_template('reset_password.html')
-
 
 @app.route('/reset-password/<token>', methods=['GET', 'POST'])
 def reset_password_confirm(token):
