@@ -847,6 +847,12 @@ def update_task(task_id):
                update_approval = "Approved!" 
             else:
                update_approval = "Pending"
+               due_date = current_due_date
+               priority = current_priority
+               description = current_description
+               portion = current_portion
+               monthly_action_id = current_monthly_action_id
+               assigned_person = current_assigned_person
             # Update the task without changing the task assigner if the user is an employee
             if user_role == 'Employee':
                 cursor.execute("""
