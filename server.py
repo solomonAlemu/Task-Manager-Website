@@ -70,13 +70,19 @@ def init_db():
 
         # Insert default roles if they don't exist
         cursor.execute('''
-        INSERT OR IGNORE INTO user_roles (role_name, role_level, reports_to) 
-        VALUES 
-            ('Managing Director', 1, NULL),
-            ('Director', 2, 1),
-            ('Manager', 3, 2),
-            ('Team Leader', 4, 3),
-            ('Employee', 5, 4)
+            INSERT OR IGNORE INTO user_roles (role_name, role_level, reports_to) 
+            VALUES 
+                ('Managing Director', 1, NULL),
+                ('Acting Managing Director', 1, NULL),
+                ('Director', 2, 1),
+                ('Acting Director', 2, 1),
+                ('Manager', 3, 2),
+                ('Acting Manager', 3, 2),
+                ('Team Leader', 4, 3),
+                ('Acting Team Leader', 4, 3),
+                ('ACE Agent', 5, 4),
+                ('ACE Co-Agent', 5, 4),       
+                ('Employee', 6, 5); 
         ''')
 
         # Create users table with department column
@@ -414,9 +420,8 @@ def add_task():
 
     try:
         recipients = json.loads(recipients)
-        assigned_person = ", ".join(recipient['name'] for recipient in recipients)
     except json.JSONDecodeError:
-        assigned_person = ""
+        recipients = []
 
     if not description:
         flash("Description is required.", "error")
@@ -426,39 +431,39 @@ def add_task():
         with get_db_connection() as conn:
             cursor = conn.cursor()
 
-            # Retrieve assignee_id from assigned_person reference
-            assignee_id = None
-            if assigned_person:
+            for recipient in recipients:
+                assigned_person = recipient['name']
+                
+                # Retrieve assignee_id from assigned_person reference
                 cursor.execute("SELECT id FROM users WHERE username = ?", (assigned_person,))
                 assignee_row = cursor.fetchone()
                 if not assignee_row:
-                    flash("Error: Assigned person not found!", "error")
-                    return redirect(url_for('home'))
+                    flash(f"Error: Assigned person '{assigned_person}' not found!", "error")
+                    continue
                 assignee_id = assignee_row[0]
 
-            # Validate portion against monthly action target if provided
-            if monthly_action_id:
-                cursor.execute("""
-                    SELECT ma.target_portion,
-                           (SELECT COALESCE(SUM(portion), 0)
-                            FROM tasks
-                            WHERE monthly_action_id = ?) as allocated_portions
-                    FROM monthly_action_items ma
-                    WHERE ma.id = ?
-                """, (monthly_action_id, monthly_action_id))
-                
-                action_data = cursor.fetchone()
-                if action_data:
-                    total_target = action_data[0] or 0
-                    allocated = action_data[1] or 0
-                    remaining = total_target - allocated
+                # Validate portion against monthly action target if provided
+                if monthly_action_id:
+                    cursor.execute("""
+                        SELECT ma.target_portion,
+                               (SELECT COALESCE(SUM(portion), 0)
+                                FROM tasks
+                                WHERE monthly_action_id = ?) as allocated_portions
+                        FROM monthly_action_items ma
+                        WHERE ma.id = ?
+                    """, (monthly_action_id, monthly_action_id))
+                    
+                    action_data = cursor.fetchone()
+                    if action_data:
+                        total_target = action_data[0] or 0
+                        allocated = action_data[1] or 0
+                        remaining = total_target - allocated
 
-                    if portion > remaining:
-                        flash(f"Error: Portion ({portion}) exceeds remaining target ({remaining}).", "error")
-                        return redirect(url_for('home'))
+                        if portion > remaining:
+                            flash(f"Error: Portion ({portion}) exceeds remaining target ({remaining}) for '{assigned_person}'.", "error")
+                            continue
 
-            # Check task assignment hierarchy if assignee_id is provided
-            if assignee_id:
+                # Check task assignment hierarchy
                 cursor.execute("SELECT role FROM users WHERE id = ?", (user_id,))
                 assigner_role = cursor.fetchone()[0]
 
@@ -473,52 +478,53 @@ def add_task():
                 
                 levels = cursor.fetchone()
                 if not levels or levels[0] > levels[1]:
-                    flash("Error: Invalid task assignment hierarchy", "error")
-                    return redirect(url_for('home'))
+                    flash(f"Error: Invalid task assignment hierarchy for '{assigned_person}'.", "error")
+                    continue
 
-            # Insert the task
-            cursor.execute("""
-                INSERT INTO tasks (
-                    user_id, assigned_person, description, priority, due_date, portion,
-                    status, monthly_action_id, assigned_by, requires_approval, approved_by
-                ) VALUES (?, ?, ?, ?, ?, ?, 'Open', ?, ?, ?, ?)
-            """, (
-                assignee_id if assignee_id else user_id,
-                assigned_person,
-                description,
-                priority,
-                due_date,
-                portion,
-                monthly_action_id,
-                user_id,
-                1 if assignee_id else 0,
-                user_id
-            ))
-
-            # Update monthly action progress
-            if monthly_action_id:
+                # Insert the task
                 cursor.execute("""
-                    UPDATE monthly_action_items
-                    SET current_value = (
-                        SELECT COALESCE(SUM(portion), 0)
-                        FROM tasks
-                        WHERE monthly_action_id = ?
-                    ),
-                    percentage_completion = (
-                        SELECT ROUND(COALESCE(SUM(portion), 0) * 100.0 / target_portion)
-                        FROM tasks
-                        WHERE monthly_action_id = ? AND status = 'Completed'
-                    )
-                    WHERE id = ?
-                """, (monthly_action_id, monthly_action_id, monthly_action_id))
+                    INSERT INTO tasks (
+                        user_id, assigned_person, description, priority, due_date, portion,
+                        status, monthly_action_id, assigned_by, requires_approval, approved_by
+                    ) VALUES (?, ?, ?, ?, ?, ?, 'Open', ?, ?, ?, ?)
+                """, (
+                    assignee_id,
+                    assigned_person,
+                    description,
+                    priority,
+                    due_date,
+                    portion,
+                    monthly_action_id,
+                    user_id,
+                    1,
+                    user_id
+                ))
+
+                # Update monthly action progress
+                if monthly_action_id:
+                    cursor.execute("""
+                        UPDATE monthly_action_items
+                        SET current_value = (
+                            SELECT COALESCE(SUM(portion), 0)
+                            FROM tasks
+                            WHERE monthly_action_id = ?
+                        ),
+                        percentage_completion = (
+                            SELECT ROUND(COALESCE(SUM(portion), 0) * 100.0 / target_portion)
+                            FROM tasks
+                            WHERE monthly_action_id = ? AND status = 'Completed'
+                        )
+                        WHERE id = ?
+                    """, (monthly_action_id, monthly_action_id, monthly_action_id))
 
             conn.commit()
-            flash('Task added successfully!', 'success')
+            flash('Tasks added successfully!', 'success')
             return redirect(url_for('home'))
 
     except sqlite3.Error as e:
         flash(f"Error: {e}", "error")
         return redirect(url_for('home'))
+
 @app.route('/approve-task/<int:task_id>', methods=['POST'])
 def approve_task(task_id):
     """Approve or reject an approval request for a task from the task assigner."""
