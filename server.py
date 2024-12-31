@@ -317,7 +317,11 @@ def home():
                 LEFT JOIN users ua ON tasks.approved_by = ua.id
                 LEFT JOIN monthly_action_items ON tasks.monthly_action_id = monthly_action_items.id
                 WHERE (tasks.user_id = ? OR tasks.assigned_by = ? OR tasks.assigned_person = ? OR tasks.approved_by = ?)
-                AND (tasks.status NOT IN ('Completed', 'Cancelled') OR tasks.approval_status != 'Approved!')
+                AND NOT (
+                    tasks.status IN ('Completed', 'Cancelled') 
+                    AND tasks.approval_status IN ('Approved!', 'Rejected!') 
+                    AND tasks.percentage_completion = 100
+                )
             """, (user_id, user_id, current_username, user_id))
 
             tasks = cursor.fetchall()
@@ -333,6 +337,7 @@ def home():
     except sqlite3.Error as e:
         print(f"Database error: {e}")
         return f"An error occurred: {e}", 500
+
 
 # Add these new routes to server.py
 @app.route('/assign-task', methods=['POST'])
@@ -520,9 +525,9 @@ def approve_task(task_id):
     if 'user_id' not in session:
         flash("Unauthorized: Please log in to approve or reject tasks.", "error")
         return redirect(url_for('login'))
-    
+
     approval_status = request.form.get('status')  # 'approved' or 'rejected'
-    
+
     try:
         with get_db_connection() as conn:
             cursor = conn.cursor()
@@ -543,19 +548,34 @@ def approve_task(task_id):
             approved_by = task[1]
             approver_id = session['user_id']
 
-            # Check if the task assigner is the same as the task approver
+            # Determine final approval status
             if approved_by == approver_id:
-                approval_status = approval_status
+                final_approval_status = approval_status
             else:
-                approval_status = "Pending (" + approval_status + ")" # Use + for string concatenation
+                final_approval_status = "Pending (" + approval_status + ")"
 
-            # Update task approval status without changing approver_id
-            cursor.execute('''
-                UPDATE tasks 
-                SET approval_status = ?
-                WHERE id = ?
-            ''', (approval_status, task_id))
-            
+            # Set additional fields if the task is approved
+            if approval_status.lower() == 'Approved!':
+                task_status = 'Completed'
+                percentage_completion = 100
+            else:
+                task_status = None
+                percentage_completion = None
+
+            # Update task approval status and potentially other fields
+            if task_status and percentage_completion is not None:
+                cursor.execute('''
+                    UPDATE tasks 
+                    SET approval_status = ?, status = ?, percentage_completion = ?
+                    WHERE id = ?
+                ''', (final_approval_status, task_status, percentage_completion, task_id))
+            else:
+                cursor.execute('''
+                    UPDATE tasks 
+                    SET approval_status = ?
+                    WHERE id = ?
+                ''', (final_approval_status, task_id))
+
             conn.commit()
             flash(f"Task {approval_status}.", "success")
             return redirect(url_for('home'))
@@ -793,6 +813,7 @@ def update_task(task_id):
                 status = current_status
             if percentage_completion == 0:
                 percentage_completion = current_percentage
+                status = current_status
             if not priority:
                 priority = current_priority
             if not due_date:
@@ -845,6 +866,7 @@ def update_task(task_id):
                     return "Error: Invalid task assignment hierarchy", 403
             if user_id == current_approved_by and status == 'Completed':
                update_approval = "Approved!" 
+               percentage_completion = 100
             else:
                update_approval = "Pending"
                due_date = current_due_date
