@@ -146,7 +146,7 @@
             <tbody>
                 {% for action in monthly_actions %}
                 <tr>
-                    <td>{{ action.id }}</td>
+                    <td>{{ loop.index }}</td>
                     <td>{{ action.description }}</td>
                     <td>{{ action.priority }}</td>
                     <td>{{ action.due_date or '' }}</td>
@@ -271,70 +271,71 @@
 		});
 		
 		
-		// Fetch Monthly Action Items Dynamically
-		document.getElementById('fetchButton').addEventListener('click', function () {
-		    const status = document.getElementById('status').value;
-		    const keyword = document.getElementById('keyword').value;
-		    const start_date = document.getElementById('start_date').value;
-		    const end_date = document.getElementById('end_date').value;
+// Fetch Monthly Action Items Dynamically
+document.getElementById('fetchButton').addEventListener('click', function () {
+    const status = document.getElementById('status').value;
+    const keyword = document.getElementById('keyword').value;
+    const start_date = document.getElementById('start_date').value;
+    const end_date = document.getElementById('end_date').value;
 
-		    const params = new URLSearchParams();
-		    if (status) params.append('status', status);
-		    if (keyword) params.append('keyword', keyword);
-		    if (start_date) params.append('start_date', start_date);
-		    if (end_date) params.append('end_date', end_date);
+    const params = new URLSearchParams();
+    if (status) params.append('status', status);
+    if (keyword) params.append('keyword', keyword);
+    if (start_date) params.append('start_date', start_date);
+    if (end_date) params.append('end_date', end_date);
 
-		    console.log(`Fetching monthly actions with params: ${params.toString()}`); // Debugging log
+    console.log(`Fetching monthly actions with params: ${params.toString()}`); // Debugging log
 
-		    fetch(`/fetch_monthly_actions?${params.toString()}`)
-		        .then(response => response.json())
-		        .then(data => {
-		            const actionResults = document.getElementById('actionResults');
-		            actionResults.innerHTML = ''; // Clear previous results
+    fetch(`/fetch_monthly_actions?${params.toString()}`)
+        .then(response => response.json())
+        .then(data => {
+            const actionResults = document.getElementById('actionResults');
+            actionResults.innerHTML = ''; // Clear previous results
 
-		            if (data.success) {
-		                if (data.monthly_actions.length === 0) {
-		                    actionResults.innerHTML = '<p>No action items found.</p>';
-		                } else {
-		                    const table = document.createElement('table');
-		                    table.className = 'fetch-list';
-		                    const thead = `
-		                        <thead>
-		                            <tr>
-		                                <th>ID</th>
-		                                <th>Description</th>
-		                                <th>Status</th>
-		                                <th>Created At	 </th>
-		                                <th>Completion (%)</th>
-		                                <th>Notes</th>
-		                            </tr>
-		                        </thead>`;
-		                    table.innerHTML = thead;
+            if (data.success) {
+                if (data.monthly_actions.length === 0) {
+                    actionResults.innerHTML = '<p>No action items found.</p>';
+                } else {
+                    const table = document.createElement('table');
+                    table.className = 'fetch-list';
+                    const thead = `
+                        <thead>
+                            <tr>
+                                <th>ID</th>
+                                <th>Description</th>
+                                <th>Status</th>
+                                <th>Created At</th>
+                                <th>Completion (%)</th>
+                                <th>Notes</th>
+                            </tr>
+                        </thead>`;
+                    table.innerHTML = thead;
 
-		                    const tbody = document.createElement('tbody');
-		                    data.monthly_actions.forEach(action => {
-		                        const row = `
-		                            <tr>
-		                                <td>${action.id}</td>
-		                                <td>${action.description}</td>
-		                                <td>${action.status}</td>
-		                                <td>${action.created_at || 'N/A'}</td>
-		                                <td>${action.percentage_completion}%</td>
-		                                <td>${action.notes || ''}</td>
-		                            </tr>`;
-		                        tbody.innerHTML += row;
-		                    });
-		                    table.appendChild(tbody);
-		                    actionResults.appendChild(table);
-		                }
-		            } else {
-		                actionResults.innerHTML = `<p>Error: ${data.error}</p>`;
-		            }
-		        })
-		        .catch(error => {
-		            console.error('Error fetching action items:', error);
-		        });
-		});
+                    const tbody = document.createElement('tbody');
+                    data.monthly_actions.forEach((action, index) => {
+                        const row = `
+                            <tr>
+                                <td>${index + 1}</td> <!-- Sequential Index starting from 1 -->
+                                <td>${action.description}</td>
+                                <td>${action.status}</td>
+                                <td>${action.created_at || 'N/A'}</td>
+                                <td>${action.percentage_completion}%</td>
+                                <td>${action.notes || ''}</td>
+                            </tr>`;
+                        tbody.innerHTML += row;
+                    });
+                    table.appendChild(tbody);
+                    actionResults.appendChild(table);
+                }
+            } else {
+                actionResults.innerHTML = `<p>Error: ${data.error}</p>`;
+            }
+        })
+        .catch(error => {
+            console.error('Error fetching action items:', error);
+            actionResults.innerHTML = '<p>An error occurred while fetching the plans. Please try again later.</p>';
+        });
+});
 
 
         function displayTextWithNewLines(text, elementId) {

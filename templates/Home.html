@@ -392,17 +392,17 @@ document.addEventListener('DOMContentLoaded', () => {
                         const table = document.createElement('table');
                         table.className = 'history-list';
                         table.innerHTML = `
-<thead>
-<tr>
-<th>ID</th>
-<th>Assigned Person</th>
-<th>Description</th>
-<th>Status</th>
-<th>Notes</th>
-<th>Created At</th>
-<th>Monthly Action</th>
-</tr>
-</thead>
+										<thead>
+											<tr>
+											<th>ID</th>
+											<th>Assigned Person</th>
+											<th>Description</th>
+											<th>Status</th>
+											<th>Notes</th>
+											<th>Created At</th>
+											<th>Monthly Action</th>
+											</tr>
+										</thead>
 `;
 
                         const tbody = document.createElement('tbody');
@@ -410,15 +410,15 @@ document.addEventListener('DOMContentLoaded', () => {
                         for (let i = 0; i < data.tasks.length; i++) {
                             const task = data.tasks[i];
                             const row = `
-<tr>
-<td>${i + 1}</td>
-<td>${task.assigned_person}</td>
-<td>${task.description}</td>
-<td>${task.status}</td>
-<td>${task.notes || ''}</td>
-<td>${task.created_at}</td>
-<td>${task.monthly_action_description}</td>
-</tr>
+										<tr>
+											<td>${i + 1}</td>
+											<td>${task.assigned_person}</td>
+											<td>${task.description}</td>
+											<td>${task.status}</td>
+											<td>${task.notes || ''}</td>
+											<td>${task.created_at}</td>
+											<td>${task.monthly_action_description}</td>
+										</tr>
 `;
                             tbody.innerHTML += row;
                         }

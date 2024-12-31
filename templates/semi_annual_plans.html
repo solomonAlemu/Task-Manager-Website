@@ -132,80 +132,79 @@
 		    {% endif %}
 		{% endwith %}			
         <h3>Current Semi-Annual Plans</h3>
-{% if plans %}
-<table class="plan-list">
-    <thead>
-        <tr>
-            <th>ID</th>
-            <th>Title</th>
-            <th>Description</th>
-            <th>Target Value</th>
-            <th>Progress</th>
-            <th>Timeline</th>
-            <th>Priority</th>
-            <th>Status</th>
-            <th>Notes</th>
-            <th>Actions</th>
-        </tr>
-    </thead>
-    <tbody>
-        {% for plan in plans %}
-        <tr>
-            <td>{{ loop.index }}</td>
-            <td>{{ plan.title }}</td>
-            <td>{{ plan.description }}</td>
-            <td>{{ plan.target_value }}</td>
-            <td>
-                {{ plan.current_value }}/{{ plan.target_value }}
-                ({{ plan.percentage_completion }}%)
-            </td>
-            <td>
-                {{ plan.start_date }} to {{ plan.end_date }}
-            </td>
-            <td>{{ plan.priority }}</td>
-            <td>{{ plan.status }}</td>
-            <td>{{ plan.notes }}</td>
-            <td>
-                <button type="button" id="show-edit-btn-{{ plan[0] }}" class="show-btn" onclick="toggleEdit({{ plan[0] }})">Edit Plan</button>
-                <div id="edit-section-{{ plan[0] }}" class="form-group" style="display: none;">
-                    <form action="{{ url_for('delete_semi_annual_plan', plan_id=plan.id) }}" method="post">
-                        <button type="submit" class="delete-btn" onclick="return confirm('Are you sure you want to delete this plan?')">Delete</button>
-                    </form>
-                    <div class="edit-section">
-                        <form action="{{ url_for('update_semi_annual_plan', plan_id=plan.id) }}" method="post">
-                            <input type="text" name="title" placeholder="Title: {{ plan.title }}">
-                            <input type="text" name="description" placeholder="Description: {{ plan.description }}">
-                            <input type="number" name="target_value" placeholder="Target Value {{ plan.target_value }}">
-                            <input type="date" name="start_date" placeholder="Start Date: {{ plan.start_date }}">
-                            <input type="date" name="end_date" placeholder="End Date: {{ plan.end_date }}">
-                            <select name="priority">
-                                <option value="High" {% if plan.priority == 'High' %}selected{% endif %}>High</option>
-                                <option value="Medium" {% if plan.priority == 'Medium' %}selected{% endif %}>Medium</option>
-                                <option value="Low" {% if plan.priority == 'Low' %}selected{% endif %}>Low</option>
-                            </select>
-                            <select name="status" required>
-                                <option value="Open" {% if plan.status == 'Open' %}selected{% endif %}>Open</option>
-                                <option value="In Progress" {% if plan.status == 'In Progress' %}selected{% endif %}>In Progress</option>
-                                <option value="Completed" {% if plan.status == 'Completed' %}selected{% endif %}>Completed</option>
-                            </select>
-                            <input type="number" name="current_value" placeholder="Current Value" 
-                                   value="{{ plan.current_value }}" step="0.01">
-                            <input type="number" name="percentage_completion" placeholder="Completion %" 
-                                   value="{{ plan.percentage_completion }}" min="0" max="100">
-                            <textarea name="notes" placeholder="Update notes...">{{ plan.notes }}</textarea>
-                            <button type="submit">Update Plan</button>
-                        </form>
-                    </div>
-                </div>
-            </td>
-        </tr>
-        {% endfor %}
-    </tbody>
-</table>
-{% else %}
-<p>No plans found.</p>
-{% endif %}
-
+        {% if plans %}
+        <table class="plan-list">
+            <thead>
+                <tr>
+                    <th>ID</th>
+                    <th>Title</th>
+                    <th>Description</th>
+                    <th>Target Value</th>
+					<th>Progress</th>
+                    <th>Timeline</th>
+                    <th>Priority</th>
+                    <th>Status</th>
+                    <th>Notes</th>
+                    <th>Actions</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for plan in plans %}
+                <tr>
+                    <td>{{loop.index }}</td>
+                    <td>{{ plan.title }}</td>
+                    <td>{{ plan.description }}</td>
+                    <td>{{ plan.target_value }}</td>
+					<td>
+					    {{ plan.current_value }}/{{ plan.target_value }}
+					    ({{ plan.percentage_completion }}%)
+					</td>					
+					<td>
+					    {{ plan.start_date }} to {{ plan.end_date }}
+					</td>
+                    <td>{{ plan.priority }}</td>
+                    <td>{{ plan.status }}</td>
+                    <td>{{ plan.notes }}</td>
+                    <td>
+                        <button type="button" id="show-edit-btn-{{ plan.id }}" class="show-btn" onclick="toggleEdit({{ plan.id }})">Edit Plan</button>
+						<div id="edit-section-{{ plan.id }}" class="form-group" style="display: none;">
+		                        <div  class="edit-section" >
+		                            <form action="{{ url_for('update_semi_annual_plan', plan_id=plan.id) }}" method="post">
+		                                <input type="text" name="title"   placeholder="Title:  {{ plan.title }}">
+		                                <input type="text" name="description"   placeholder="Description: {{ plan.description }}">
+		                                <input type="number" name="target_value"  placeholder="Target Value {{ plan.target_value }}">
+		                                <input type="date" name="start_date"   placeholder="Start Date: {{ plan.start_date }}">
+		                                <input type="date" name="end_date"   placeholder="End Date: {{ plan.end_date }}">
+		                                <select name="priority">
+		                                    <option value="High" {% if plan.priority == 'High' %}selected{% endif %}>High</option>
+		                                    <option value="Medium" {% if plan.priority == 'Medium' %}selected{% endif %}>Medium</option>
+		                                    <option value="Low" {% if plan.priority == 'Low' %}selected{% endif %}>Low</option>
+		                                </select>
+										<select name="status" required>
+										    <option value="Open" {% if plan.status == 'Open' %}selected{% endif %}>Open</option>
+										    <option value="In Progress" {% if plan.status == 'In Progress' %}selected{% endif %}>In Progress</option>
+										    <option value="Completed" {% if plan.status == 'Completed' %}selected{% endif %}>Completed</option>
+										</select>
+										<input type="number" name="current_value" placeholder="Current Value" 
+										       value="{{ plan.current_value }}" step="0.01">
+										<input type="number" name="percentage_completion" placeholder="Completion %" 
+										       value="{{ plan.percentage_completion }}" min="0" max="100">
+										<textarea name="notes" placeholder="Update notes...">{{ plan.notes }}</textarea>
+		                                <button type="submit">Update Plan</button>
+		                            </form>
+									<form action="{{ url_for('delete_semi_annual_plan', plan_id=plan.id) }}" method="post">
+									    <button type="submit" class="delete-btn" onclick="return confirm('Are you sure you want to delete this plan?')">Delete</button>
+									</form>									
+		                        </div>
+					 </div>	
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+        {% else %}
+        <p>No semi-annual plans found.</p>
+        {% endif %}
     </section>
     
     <script>
