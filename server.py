@@ -940,6 +940,7 @@ def update_task(task_id):
         print(f"Database error: {e}")
         flash(f"Error: {e}", "error")
         return redirect(url_for('home'))
+
 @app.route('/delete_task/<int:task_id>', methods=['POST'])
 def delete_task(task_id):
     """Delete a specific task and update related monthly action progress."""
