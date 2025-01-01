@@ -431,8 +431,9 @@ def add_task():
         with get_db_connection() as conn:
             cursor = conn.cursor()
             if not recipients: 
-                       cursor.execute("SELECT username FROM users WHERE id = ?", (user_id,))
-                       recipients = [{"name": assigned_person}]
+                   cursor.execute("SELECT username FROM users WHERE id = ?", (user_id,))
+                   assigned_person = cursor.fetchone()['username']
+                   recipients = [{"name": assigned_person}]
                        
             for recipient in recipients:
                 assigned_person = recipient['name']
