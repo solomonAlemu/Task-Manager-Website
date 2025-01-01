@@ -1922,7 +1922,7 @@ def monthly_progress_data():
                        SUM(CASE WHEN status = 'Completed' THEN 1 ELSE 0 END) AS completed,
                        SUM(CASE WHEN status = 'In Progress' THEN 1 ELSE 0 END) AS in_progress,
                        SUM(CASE WHEN status = 'Open' THEN 1 ELSE 0 END) AS open
-                {task_base_query}
+                {action_base_query}
                 GROUP BY month
                 ORDER BY month
             """, params)
@@ -1952,7 +1952,7 @@ def monthly_progress_data():
             # 5. Total Tasks by Priority
             cursor.execute(f"""
                 SELECT priority, COUNT(*) AS total_tasks
-                {task_base_query}
+                {action_base_query}
                 GROUP BY priority
             """, params)
             total_tasks_by_priority = dict(cursor.fetchall())
@@ -1961,11 +1961,20 @@ def monthly_progress_data():
             cursor.execute(f"""
                 SELECT strftime('%Y-%m-%d', created_at) AS date,
                        COUNT(CASE WHEN status = 'Completed' THEN 1 END) AS completed_tasks
-                {task_base_query}
+                {action_base_query}
                 GROUP BY date
                 ORDER BY date
             """, params)
             task_completion_timeline = cursor.fetchall()
+            
+            # 7. Action Items Completion Status by Priority
+            cursor.execute(f"""
+                SELECT priority,
+                       AVG(percentage_completion) AS completion_percentage
+                {action_base_query}
+                GROUP BY priority
+            """, params)
+            completion_status_data = cursor.fetchall()
 
             # Prepare JSON response
             return jsonify({
@@ -1987,12 +1996,12 @@ def monthly_progress_data():
                 "task_completion_timeline": {
                     "dates": [row[0] for row in task_completion_timeline],
                     "completed_tasks": [row[1] for row in task_completion_timeline]
-                }
+                },
+                "completion_status_by_priority": {row[0]: row[1] for row in completion_status_data}
             })
     except sqlite3.Error as e:
         print(f"Database error: {e}")
-        return jsonify({"error": "Failed to fetch progress data."}), 500
-    
+        return jsonify({"error": "Failed to fetch progress data."}), 500  
 @app.route('/upload_tasks', methods=['POST'])
 def upload_tasks():
     """Upload and process tasks from Excel/CSV file for the logged-in user."""

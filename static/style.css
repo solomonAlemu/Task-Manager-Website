@@ -66,7 +66,7 @@ form input[name="priority" ], form select, form textarea {
 }
 form input[name="status" ], form select, form textarea {
     display: block;
-    width: calc(50% - 20px); /* Match column widths by aligning with table cell padding */
+    width: 100%; /* Match column widths by aligning with table cell padding */
     padding: 5px;
 }
 form input[name="keyword" ], form select, form textarea {
@@ -190,14 +190,14 @@ table th, table td {
 .action-list td:nth-child(4) { width: 10%; }    /* Due Date */
 .action-list td:nth-child(5) { width: 5%; }    /* Status */
 .action-list td:nth-child(6) { width: 5%; }    /* Completion */
-.action-list td:nth-child(7) { width: 15%; }   /* Actions */
+.action-list td:nth-child(7) { width: 20%; }   /* Actions */
 .action-list td:nth-child(8) { 
 	white-space: pre-wrap; /* Preserve white-space and wrap text */
 	word-wrap: break-word; /* Break long words to wrap within the container */
 	word-break: break-word; /* Ensure words are broken to fit within the width */
 	overflow-wrap: break-word; /* Handle word wrapping for overflows */
 
-	width: 30%; }   /* Updates */
+	width: 20%; }   /* Updates */
 
 
 /* Adjust column width ratios for the first table */
@@ -316,7 +316,7 @@ form button.update-btn:hover {
 }
 /* Grid container for form layout */
 .grid-container {
-    display: grid;
+ 
     grid-template-columns: 1fr 1fr; /* Two columns */
     gap: 20px; /* Space between grid items */
     align-items: center;

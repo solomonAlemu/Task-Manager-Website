@@ -31,22 +31,6 @@
             </div>
         </div>
 
-        <!-- Monthly Progress for Tasks -->
-        <div class="chart-item">
-            <h3>Monthly Progress - Tasks</h3>
-            <div class="chart-wrapper">
-                <canvas id="taskProgressChart" class="chart-canvas"></canvas>
-            </div>
-        </div>
-
-        <!-- Monthly Progress for Action Items -->
-        <div class="chart-item">
-            <h3>Monthly Progress - Action Items</h3>
-            <div class="chart-wrapper">
-                <canvas id="actionProgressChart" class="chart-canvas"></canvas>
-            </div>
-        </div>
-
         <!-- Action Item Status Breakdown -->
         <div class="chart-item">
             <h3>Action Item Status Breakdown</h3>
@@ -54,20 +38,18 @@
                 <canvas id="actionStatusChart" class="chart-canvas"></canvas>
             </div>
         </div>
-
+		<!-- Action Items Completion Status by Priority -->
+		<div class="chart-item">
+		    <h3>Action Items Completion Status by Priority</h3>
+		    <div class="chart-wrapper">
+		        <canvas id="actionItemsCompletionStatusChart" class="chart-canvas"></canvas>
+		    </div>
+		</div>
         <!-- Total Task Count by Priority -->
         <div class="chart-item">
-            <h3>Total Tasks by Priority</h3>
+            <h3>Total  Action Items by Priority</h3>
             <div class="chart-wrapper">
                 <canvas id="totalTasksByPriorityChart" class="chart-canvas"></canvas>
-            </div>
-        </div>
-
-        <!-- Task Completion Timeline -->
-        <div class="chart-item">
-            <h3>Task Completion Timeline</h3>
-            <div class="chart-wrapper">
-                <canvas id="taskCompletionTimelineChart" class="chart-canvas"></canvas>
             </div>
         </div>
     </div>
@@ -107,6 +89,13 @@
 	    transform: translateY(-5px); /* A subtle translation effect instead */
 	}
 
+    /* Chart Wrapper */
+    .chart-wrapper {
+        position: relative;
+        width: 100%;
+        height: 350px;
+        padding: 15px;
+    }
 
 	/* Chart Wrapper */
 	.chart-wrapper {
@@ -177,11 +166,24 @@
 	        border: 1px solid #ddd;
 	    }
 	}
+	/* Limit the chart container width */
+	.chart-container {
+	    width: 80%; /* Adjust percentage as needed */
+	    max-width: 800px; /* Optional max-width for clarity */
+	    margin: 0 auto; /* Center the chart */
+	}
+
+	/* Style for better rendering on high-DPI screens */
+	canvas {
+	    image-rendering: crisp-edges;
+	    image-rendering: pixelated;
+	}
+
 </style>
 
 <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 
-<script>
+ <script>
     document.addEventListener("DOMContentLoaded", () => {
         const chartOptions = {
             responsive: true,
@@ -230,7 +232,7 @@
                                 const priorityDetails = context.chart.data.priorityDetails[context.label];
                                 return [
                                     `${datasetLabel}: ${value}%`,
-                                    `Total Tasks: ${priorityDetails.total_tasks}`,
+                                    `Total Action Items: ${priorityDetails.total_tasks}`,
                                     `Task Descriptions: ${priorityDetails.task_descriptions.substring(0, 50)}...`
                                 ];
                             }
@@ -245,15 +247,15 @@
         // Function to fetch and render charts
         async function fetchChartData(startDate = null, endDate = null) {
             try {
-                const url = new URL("/monthly-progress-data", window.location.origin);
-                if (startDate) url.searchParams.append("start_date", startDate);
-                if (endDate) url.searchParams.append("end_date", endDate);
-
-                const response = await fetch(url);
-                const data = await response.json();
+                const urls = [
+                    '/monthly-progress-data'
+                ];
+                
+                const responses = await Promise.all(urls.map(url => fetch(url + (startDate && endDate ? `?start_date=${startDate}&end_date=${endDate}` : ''))));
+                const [data] = await Promise.all(responses.map(res => res.json()));
 
                 // Clear existing charts (if any)
-                ["priorityCompletionChart", "taskProgressChart", "actionProgressChart", "actionStatusChart", "totalTasksByPriorityChart", "taskCompletionTimelineChart"].forEach((chartId) => {
+                ["priorityCompletionChart", "actionStatusChart", "totalTasksByPriorityChart", "actionItemsCompletionStatusChart"].forEach((chartId) => {
                     const canvas = document.getElementById(chartId);
                     const existingChart = Chart.getChart(canvas);
                     if (existingChart) existingChart.destroy();
@@ -261,15 +263,17 @@
 
                 // Render Priority vs Completion % Chart
                 const priorityCompletionChart = new Chart(document.getElementById("priorityCompletionChart").getContext("2d"), {
-                    type: "bar",
-                    data: {
-                        labels: Object.keys(data.priority_completion),
-                        datasets: [{
-                            label: "Completion % by Priority",
-                            data: Object.values(data.priority_completion),
-                            backgroundColor: ["#00FFFF", "#FFA500", "#FF0000"],
-                        }]
-                    },
+			type: "bar",
+			data: {
+			    labels: Object.keys(data.priority_completion).map((action) => action.split(" ")[0]), // Extract Action ID
+			    datasets: [
+				{
+				    label: "Completion % by Priority",
+				    data: Object.values(data.priority_completion),
+				    backgroundColor: ["#FFB347", "#FF6347", "#87CEEB"], // Use distinct colors
+				},
+			    ],
+			},
                     options: { 
                         ...chartOptions,
                     }
@@ -278,30 +282,16 @@
                 // Add priority details to the chart for tooltip use
                 priorityCompletionChart.data.priorityDetails = data.priority_completion_details;
 
-                // Render Monthly Task Progress
-                new Chart(document.getElementById("taskProgressChart").getContext("2d"), {
+                // Render Action Items Completion Status by Priority
+                new Chart(document.getElementById("actionItemsCompletionStatusChart").getContext("2d"), {
                     type: "bar",
                     data: {
-                        labels: data.task_progress.labels,
-                        datasets: [
-                            { label: "Completed", data: data.task_progress.completed, backgroundColor: "#4BC0C0" },
-                            { label: "In Progress", data: data.task_progress.in_progress, backgroundColor: "#FF9F40" },
-                            { label: "Open", data: data.task_progress.open, backgroundColor: "#FF6384" },
-                        ],
-                    },
-                    options: { ...chartOptions },
-                });
-
-                // Render Monthly Action Item Progress
-                new Chart(document.getElementById("actionProgressChart").getContext("2d"), {
-                    type: "bar",
-                    data: {
-                        labels: data.action_progress.labels,
-                        datasets: [
-                            { label: "Completed", data: data.action_progress.completed, backgroundColor: "#4BC0C0" },
-                            { label: "In Progress", data: data.action_progress.in_progress, backgroundColor: "#FF9F40" },
-                            { label: "Open", data: data.action_progress.open, backgroundColor: "#FF6384" },
-                        ],
+                        labels: Object.keys(data.completion_status_by_priority),
+                        datasets: [{
+                            label: "Completion % by Priority",
+                            data: Object.values(data.completion_status_by_priority),
+                            backgroundColor: ["#FF0000", "#FFA500", "#00FFFF", "#808080"],
+                        }],
                     },
                     options: { ...chartOptions },
                 });
@@ -320,13 +310,13 @@
                     options: { ...chartOptions },
                 });
 
-                // Render Total Tasks by Priority
+                // Render Total Action Items by Priority
                 new Chart(document.getElementById("totalTasksByPriorityChart").getContext("2d"), {
-                    type: "bar",
+                    type: "pie",
                     data: {
                         labels: Object.keys(data.total_tasks_by_priority || {}),
                         datasets: [{
-                            label: "Total Tasks by Priority",
+                            label: "Total Action Items by Priority",
                             data: Object.values(data.total_tasks_by_priority || {}),
                             backgroundColor: ["#FF0000", "#FFA500", "#00FFFF", "#808080"],
                         }],
@@ -334,21 +324,6 @@
                     options: { ...chartOptions },
                 });
 
-                // Render Task Completion Timeline
-                new Chart(document.getElementById("taskCompletionTimelineChart").getContext("2d"), {
-                    type: "line",
-                    data: {
-                        labels: data.task_completion_timeline.dates,
-                        datasets: [{
-                            label: "Completed Tasks Over Time",
-                            data: data.task_completion_timeline.completed_tasks,
-                            backgroundColor: "#4BC0C0",
-                            borderColor: "#4BC0C0",
-                            fill: false,
-                        }],
-                    },
-                    options: { ...chartOptions },
-                });
             } catch (error) {
                 console.error("Error loading chart data:", error);
             }
