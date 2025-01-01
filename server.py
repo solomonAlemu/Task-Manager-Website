@@ -426,11 +426,14 @@ def add_task():
     if not description:
         flash("Description is required.", "error")
         return redirect(url_for('home'))
-
+       
     try:
         with get_db_connection() as conn:
             cursor = conn.cursor()
-
+            if not recipients: 
+                       cursor.execute("SELECT username FROM users WHERE id = ?", (user_id,))
+                       recipients = [{"name": assigned_person}]
+                       
             for recipient in recipients:
                 assigned_person = recipient['name']
                 
