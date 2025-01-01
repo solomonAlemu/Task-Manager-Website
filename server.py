@@ -10,11 +10,13 @@ import bcrypt
 import re
 import pandas as pd  # Import pandas to handle Excel/CSV files
 import secrets  
-
+import socket
+import platform
+import subprocess
 from email_config import EmailManager
 from email_sender import EmailNotifier
 from user_management import UserApp
-
+from waitress import serve
 from flask import send_file
 import csv
 from io import StringIO
@@ -2911,12 +2913,20 @@ def add_department_column():
         print(f"Database error: {e}")
         conn.rollback()
 
+
+def get_local_ip():
+    hostname = socket.gethostname()
+    ip_address = socket.gethostbyname(hostname)
+    return ip_address
 # Call this function before running the app
 if __name__ == '__main__':
     try:
         add_department_column()  # Add this line before init_db()
         init_db()
-        app.run(host="0.0.0.0", port=8181, threaded=True, use_reloader=False)
+        ip_address = get_local_ip()
+        # Show IP and message
+        print(f"Your app is accessible at: http://{ip_address}:8181/")
+        serve(app, host="0.0.0.0", port=8181, threads=100)  # Change `threads` to any number you need
     finally:
         scheduler.shutdown()
     
