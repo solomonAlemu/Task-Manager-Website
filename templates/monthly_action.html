@@ -116,7 +116,7 @@
         </form>
     </section>
 
-    <section>
+    <section class="action-list">  
 		{% with messages = get_flashed_messages(with_categories=true) %}
 		    {% if messages %}
 		        <div class="alerts">
@@ -130,7 +130,7 @@
 		{% endwith %}			
         <h3>Current Monthly Action Items</h3>
         {% if monthly_actions %}
-        <table class="action-list">
+        <table  class="table table-striped">
             <thead>
                 <tr>
                     <th>ID</th>

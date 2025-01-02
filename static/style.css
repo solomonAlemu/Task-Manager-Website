@@ -178,27 +178,6 @@ table th, table td {
     line-height: 1; /* Adjust this value to reduce spacing */
 }
 
-/* Adjust column width ratios for the second table */
-.action-list td:nth-child(1) { width: 5%; }    /* ID */
-.action-list td:nth-child(2) { 
-	white-space: pre-wrap; /* Preserve white-space and wrap text */
-	word-wrap: break-word; /* Break long words to wrap within the container */
-	word-break: break-word; /* Ensure words are broken to fit within the width */
-	overflow-wrap: break-word; /* Handle word wrapping for overflows */
-	width: 30%; }   /* Description */
-.action-list td:nth-child(3) { width: 5%; }    /* Priority */
-.action-list td:nth-child(4) { width: 10%; }    /* Due Date */
-.action-list td:nth-child(5) { width: 5%; }    /* Status */
-.action-list td:nth-child(6) { width: 5%; }    /* Completion */
-.action-list td:nth-child(7) { width: 20%; }   /* Actions */
-.action-list td:nth-child(8) { 
-	white-space: pre-wrap; /* Preserve white-space and wrap text */
-	word-wrap: break-word; /* Break long words to wrap within the container */
-	word-break: break-word; /* Ensure words are broken to fit within the width */
-	overflow-wrap: break-word; /* Handle word wrapping for overflows */
-
-	width: 20%; }   /* Updates */
-
 
 /* Adjust column width ratios for the first table */
 .history-list th:nth-child(1) { width: 1%; }    /* ID */
@@ -516,6 +495,19 @@ textarea {
     padding: 5px; /* Adjust padding inside table cells for better spacing */
     box-sizing: border-box; /* Ensure padding is included in the total width and height */
 }
+
+/* Narrower table rows */
+.table.table-striped th, 
+.table.table-striped td {
+    padding: 10px; /* Adjust padding to make rows narrower */
+    line-height: 1 ; /* Adjust line height for a compact look */
+}
+
+/* Optional: Reduce font size for a more compact table */
+.table.table-striped {
+    font-size: 14px; /* Adjust font size as needed */
+}
+
 
 /* Actions column components */
 .form-container {

@@ -2297,83 +2297,151 @@ def task_data():
                 start = datetime.strptime(start_date, '%Y-%m-%d').date()
                 end = datetime.strptime(end_date, '%Y-%m-%d').date()
                 
-                # Ensure start date is not after end date
                 if start > end:
                     return jsonify({"error": "Invalid date range: Start date must be before or equal to end date"}), 400
             except ValueError:
                 return jsonify({"error": "Invalid date format. Use YYYY-MM-DD"}), 400
 
         with sqlite3.connect(DATABASE) as conn:
+            conn.row_factory = sqlite3.Row
             cursor = conn.cursor()
 
-            # Base query
-            query = '''
+            # Base query with required fields
+            task_base_query = '''
             SELECT
-                id,
-                description AS name,
-                priority,
-                percentage_completion AS progress,
-                created_at,
-                due_date,   -- Include due_date in the query
-                status
-            FROM tasks
-            WHERE user_id = ? AND status IN ('Open', 'In Progress', 'Completed')
+                t.id,
+                t.description,
+                t.priority,
+                t.status,
+                t.percentage_completion,
+                t.created_at,
+                t.due_date,
+                t.portion,
+                t.assigned_person,
+                t.approval_status,
+                u.username as assigned_by_name,
+                a.username as approved_by_name
+            FROM tasks t
+            LEFT JOIN users u ON t.assigned_by = u.id
+            LEFT JOIN users a ON t.approved_by = a.id
+            WHERE t.user_id = ? 
+            AND t.status IN ('Open', 'In Progress', 'Completed')
             '''
             params = [user_id]
 
+            # Add date range filter if provided
             if start_date and end_date:
-                try:
-                    # Ensure dates are in the correct format
-                    start_date = f"{start_date} 00:00:00"  # Start at midnight
-                    end_date = f"{end_date} 23:59:59"      # End at the last second of the day
-                    
-                    # Add the date filter to the query
-                    query += " AND created_at BETWEEN ? AND ?"
-                    params.extend([start_date, end_date])
-                except ValueError:
-                    return jsonify({"error": "Invalid date format. Use YYYY-MM-DD"}), 400
+                task_base_query += """ 
+                AND DATE(t.created_at) BETWEEN DATE(?) AND DATE(?)
+                """
+                params.extend([start_date, end_date])
 
+            # Order tasks
+            task_base_query += ' ORDER BY t.priority DESC, t.percentage_completion DESC'
 
-            # Order tasks by priority and progress
-            query += ' ORDER BY priority, percentage_completion DESC'
-
-            cursor.execute(query, params)
+            # Execute main query
+            cursor.execute(task_base_query, params)
             tasks = cursor.fetchall()
 
-            # Structure the data as JSON
-            task_data = {
-                "tasks": [
-                    {
-                        "id": task[0],
-                        "name": task[1] or "Unnamed Task",
-                        "priority": task[2] or "Medium",
-                        "progress": task[3] or 0,
-                        "created_at": task[4] or "No creation date",
-                        "due_date": task[5] or None,  # Include due_date or None if not set
-                        "status": task[6]
-                    }
-                    for task in tasks
-                ],
-                "summary": {
-                    "total_tasks": len(tasks),
-                    "priorities": {
-                        "High": sum(1 for task in tasks if task[2] == "High"),
-                        "Medium": sum(1 for task in tasks if task[2] == "Medium"),
-                        "Low": sum(1 for task in tasks if task[2] == "Low")
-                    },
-                    "avg_progress": round(sum(task[3] or 0 for task in tasks) / len(tasks), 2) if tasks else 0
-                }
+            # Convert tasks to list of dictionaries
+            tasks_list = [{
+                'id': task['id'],
+                'name': task['description'] or "Unnamed Task",
+                'priority': task['priority'] or "Medium",
+                'progress': task['percentage_completion'] or 0,
+                'created_at': task['created_at'],
+                'due_date': task['due_date'],
+                'status': task['status'],
+                'portion': task['portion'] or 0,
+                'assigned_person': task['assigned_person'],
+                'approval_status': task['approval_status'],
+                'assigned_by': task['assigned_by_name'],
+                'approved_by': task['approved_by_name']
+            } for task in tasks]
+
+            # Status breakdown
+            cursor.execute(f"""
+                SELECT status, COUNT(*) as count
+                FROM ({task_base_query})
+                GROUP BY status
+            """, params)
+            status_breakdown = {row['status']: row['count'] for row in cursor.fetchall()}
+
+            # Priority breakdown
+            cursor.execute(f"""
+                SELECT priority, COUNT(*) as count
+                FROM ({task_base_query})
+                GROUP BY priority
+            """, params)
+            priority_breakdown = {row['priority']: row['count'] for row in cursor.fetchall()}
+
+            # Completion status by priority
+            cursor.execute(f"""
+                SELECT 
+                    priority,
+                    ROUND(AVG(percentage_completion), 2) as avg_completion
+                FROM ({task_base_query})
+                GROUP BY priority
+            """, params)
+            completion_status = {row['priority']: row['avg_completion'] for row in cursor.fetchall()}
+
+            # Additional analytics for portion and approval status
+            cursor.execute(f"""
+                SELECT 
+                    priority,
+                    ROUND(AVG(portion), 2) as avg_portion,
+                    COUNT(CASE WHEN approval_status = 'Approved' THEN 1 END) as approved_count,
+                    COUNT(CASE WHEN approval_status = 'Pending' THEN 1 END) as pending_count
+                FROM ({task_base_query})
+                GROUP BY priority
+            """, params)
+            portion_and_approval = {
+                row['priority']: {
+                    'avg_portion': row['avg_portion'],
+                    'approved_count': row['approved_count'],
+                    'pending_count': row['pending_count']
+                } for row in cursor.fetchall()
             }
 
-            return jsonify(task_data)
+            response_data = {
+                "tasks": tasks_list,
+                "summary": {
+                    "total_tasks": len(tasks_list),
+                    "priorities": {
+                        "High": sum(1 for task in tasks_list if task['priority'] == "High"),
+                        "Medium": sum(1 for task in tasks_list if task['priority'] == "Medium"),
+                        "Low": sum(1 for task in tasks_list if task['priority'] == "Low")
+                    },
+                    "avg_progress": round(
+                        sum(task['progress'] for task in tasks_list) / len(tasks_list) 
+                        if tasks_list else 0, 
+                        2
+                    ),
+                    "approval_status": {
+                        "Approved": sum(1 for task in tasks_list if task['approval_status'] == "Approved"),
+                        "Pending": sum(1 for task in tasks_list if task['approval_status'] == "Pending")
+                    }
+                },
+                "status_breakdown": status_breakdown,
+                "total_tasks_by_priority": priority_breakdown,
+                "completion_status_by_priority": completion_status,
+                "portion_and_approval": portion_and_approval
+            }
+
+            return jsonify(response_data)
 
     except sqlite3.Error as e:
-        print(f"Database error: {e}")
-        return jsonify({"error": "Failed to fetch task data.", "details": str(e)}), 500
+        app.logger.error(f"Database error: {e}")
+        return jsonify({
+            "error": "Database error", 
+            "details": str(e)
+        }), 500
     except Exception as e:
-        print(f"Unexpected error: {e}")
-        return jsonify({"error": "An unexpected error occurred.", "details": str(e)}), 500
-
+        app.logger.error(f"Unexpected error: {e}")
+        return jsonify({
+            "error": "An unexpected error occurred", 
+            "details": str(e)
+        }), 500
 # Add new routes for email management
 @app.route('/manage-emails', methods=['GET', 'POST'])
 def manage_emails():
