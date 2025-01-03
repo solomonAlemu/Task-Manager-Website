@@ -210,32 +210,33 @@ def init_db():
         END;
         ''')
         cursor.execute('''
-        CREATE TRIGGER IF NOT EXISTS update_semi_annual_plan_progress
-        AFTER UPDATE ON monthly_action_items
-        WHEN NEW.status = 'Completed' AND OLD.status != 'Completed'
-        BEGIN
-            UPDATE semi_annual_plans
-            SET current_value = (
-                SELECT COALESCE(SUM(target_portion), 0)
-                FROM monthly_action_items
-                WHERE semi_annual_plan_id = NEW.semi_annual_plan_id
-                AND status = 'Completed'
-            ),
-            percentage_completion = (
-                SELECT ROUND(COALESCE(SUM(target_portion), 0) * 100.0 / target_value)
-                FROM monthly_action_items
-                WHERE semi_annual_plan_id = NEW.semi_annual_plan_id
-                AND status = 'Completed'
-            )
-            WHERE id = NEW.semi_annual_plan_id;
-
-            -- Auto-complete semi-annual plan if target is reached
-            UPDATE semi_annual_plans
-            SET status = 'Completed'
-            WHERE id = NEW.semi_annual_plan_id
-            AND current_value >= target_value;
-        END;
-        ''')
+            CREATE TRIGGER IF NOT EXISTS update_semi_annual_plan_progress
+            AFTER UPDATE ON monthly_action_items
+            WHEN NEW.status = 'Completed'
+            BEGIN
+                UPDATE semi_annual_plans
+                SET current_value = (
+                    SELECT COALESCE(SUM(target_portion), 0)
+                    FROM monthly_action_items
+                    WHERE semi_annual_plan_id = NEW.semi_annual_plan_id
+                    AND status = 'Completed'
+                ),
+                percentage_completion = ROUND(
+                    (SELECT COALESCE(SUM(target_portion), 0) * 100.0 / target_value
+                     FROM monthly_action_items
+                     WHERE semi_annual_plan_id = NEW.semi_annual_plan_id
+                     AND status = 'Completed'),
+                    2
+                )
+                WHERE id = NEW.semi_annual_plan_id;
+                        -- Auto-complete semi-annual plan if target is reached
+                        UPDATE semi_annual_plans
+                        SET status = 'Completed'
+                        WHERE id = NEW.semi_annual_plan_id
+                        AND current_value >= target_value;
+            END;
+            
+                    ''')
         
         # Commit all changes
         conn.commit()

@@ -157,8 +157,8 @@
                     <td>{{ plan.target_value }}</td>
 					<td>
 					    {{ plan.current_value }}/{{ plan.target_value }}
-					    ({{ plan.percentage_completion }}%)
-					</td>					
+						({{ (plan.current_value / plan.target_value * 100) | round(2) }}%)
+					</td>				
 					<td>
 					    {{ plan.start_date }} to {{ plan.end_date }}
 					</td>
