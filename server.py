@@ -876,7 +876,7 @@ def update_task(task_id):
                 if not levels or levels[0] > levels[1]:
                     print("Error: Invalid task assignment hierarchy")
                     return "Error: Invalid task assignment hierarchy", 403
-            if user_id == current_approved_by and status == 'Completed':
+            if user_id == current_approved_by or user_id == current_assigned_by and status == 'Completed':
                update_approval = "Approved!" 
                percentage_completion = 100
             else:
@@ -1042,7 +1042,7 @@ def fetch_tasks():
     keyword = request.args.get('keyword', '').strip()
     start_date = request.args.get('start_date', '').strip()
     end_date = request.args.get('end_date', '').strip()
- 
+
     try:
         with sqlite3.connect(DATABASE) as conn:
             cursor = conn.cursor()
@@ -1054,9 +1054,9 @@ def fetch_tasks():
                 FROM tasks
                 LEFT JOIN monthly_action_items
                 ON tasks.monthly_action_id = monthly_action_items.id
-                WHERE tasks.user_id = ?
+                WHERE tasks.user_id = ? OR tasks.assigned_by = ?
             """
-            params = [user_id]
+            params = [user_id, user_id]
 
             # Apply status filter
             if status:
@@ -1067,7 +1067,7 @@ def fetch_tasks():
             if keyword:
                 query += " AND (tasks.description LIKE ? OR tasks.assigned_person LIKE ? OR monthly_action_items.description LIKE ?)"
                 keyword_pattern = f"%{keyword}%"
-                params.extend([keyword_pattern,keyword_pattern, keyword_pattern])
+                params.extend([keyword_pattern, keyword_pattern, keyword_pattern])
 
             # Apply date range filter
             if start_date and end_date:
@@ -1534,7 +1534,8 @@ def update_monthly_action(action_id):
             conn.commit()
 
         flash("Monthly action updated successfully.", "success")
-        return redirect(url_for('monthly_action'))
+        return redirect(url_for('monthly_action')) 
+
     except sqlite3.Error as e:
         flash(f"Error: Unable to update monthly action item. Details: {str(e)}", "error")
         return redirect(url_for('monthly_action'))
@@ -3003,7 +3004,7 @@ if __name__ == '__main__':
         ip_address = get_local_ip()
         # Show IP and message
         print(f"Your app is accessible at: http://{ip_address}:8181/")
-        serve(app, host="0.0.0.0", port=8181, threads=100)  # Change `threads` to any number you need
+        app.run( host="0.0.0.0", port=8181, threaded=True, use_reloader=False)
     finally:
         scheduler.shutdown()
     
